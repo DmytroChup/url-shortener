@@ -71,4 +71,19 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.url").value("URL cannot be empty"));
     }
+
+    @Test
+    @DisplayName("Should return 429 Too Many Requests when rate limit is exceeded")
+    void shouldReturnTooManyRequestsWhenRateLimitExceeded() throws Exception {
+        String clientIp = "192.168.1.100";
+
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(get("/api/v1/test").header("X-Forwarded-For", clientIp));
+        }
+
+        mockMvc.perform(get("/api/v1/test").header("X-Forwarded-For", clientIp))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.title").value("Too Many Requests"));
+    }
 }
