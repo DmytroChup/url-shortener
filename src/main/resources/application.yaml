@@ -6,3 +6,7 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+
+app:
+  obfuscation:
+    xor-mask: ${OBFUSCATION_XOR_MASK:1542469173}

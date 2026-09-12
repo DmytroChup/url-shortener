@@ -3,6 +3,7 @@ package com.chupryna.url_shortener.service;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.repository.UrlRepository;
 import com.chupryna.url_shortener.util.Base62Encoder;
+import com.chupryna.url_shortener.util.IdObfuscator;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,9 @@ public class UrlServiceTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private IdObfuscator idObfuscator;
+
     @InjectMocks
     private UrlService urlService;
 
@@ -64,14 +68,18 @@ public class UrlServiceTest {
     void getOriginalUrl_CacheMiss() {
         String shortCode = "b";
         String originalUrl = "https://example.com";
+        long obfuscatedId = 123456L;
+        long realId = 1L;
+
         when(valueOperations.get(shortCode)).thenReturn(null);
-        when(base62Encoder.decode(shortCode)).thenReturn(1L);
+        when(base62Encoder.decode(shortCode)).thenReturn(obfuscatedId);
+        when(idObfuscator.deobfuscate(obfuscatedId)).thenReturn(realId);
 
         Url entity = new Url();
         entity.setId(1L);
         entity.setOriginalUrl(originalUrl);
 
-        when(urlRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(urlRepository.findById(realId)).thenReturn(Optional.of(entity));
 
         String actualUrl = urlService.getOriginalUrl(shortCode);
 
@@ -84,10 +92,13 @@ public class UrlServiceTest {
     @DisplayName("Should throw EntityNotFoundException when short code does not exist in cache or database")
     void getOriginalUrl_NotFound() {
         String shortCode = "b";
+        long obfuscatedId = 999L;
+        long realId = 50L;
 
         when(valueOperations.get(shortCode)).thenReturn(null);
-        when(base62Encoder.decode(shortCode)).thenReturn(999L);
-        when(urlRepository.findById(999L)).thenReturn(Optional.empty());
+        when(base62Encoder.decode(shortCode)).thenReturn(obfuscatedId);
+        when(idObfuscator.deobfuscate(obfuscatedId)).thenReturn(realId);
+        when(urlRepository.findById(realId)).thenReturn(Optional.empty());
 
         assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
 
@@ -100,13 +111,16 @@ public class UrlServiceTest {
         String shortCode = "b";
         String badUrl = "example.com";
         String normalizedUrl = "https://example.com";
+        long realId = 1L;
+        long obfuscatedId = 123456L;
 
         Url savedEntity = new Url();
-        savedEntity.setId(1L);
+        savedEntity.setId(realId);
         savedEntity.setOriginalUrl(normalizedUrl);
 
         when(urlRepository.save(any(Url.class))).thenReturn(savedEntity);
-        when(base62Encoder.encode(1L)).thenReturn(shortCode);
+        when(idObfuscator.obfuscate(realId)).thenReturn(obfuscatedId);
+        when(base62Encoder.encode(obfuscatedId)).thenReturn(shortCode);
 
         String foundShortCode = urlService.shortenUrl(badUrl);
 

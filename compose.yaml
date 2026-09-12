@@ -9,6 +9,7 @@ services:
       - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}'
       - 'SPRING_JPA_HIBERNATE_DDL_AUTO=update'
       - 'SPRING_DATA_REDIS_HOST=redis'
+      - 'OBFUSCATION_XOR_MASK=${OBFUSCATION_XOR_MASK}'
     depends_on:
       - postgres
       - redis

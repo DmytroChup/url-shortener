@@ -3,6 +3,7 @@ package com.chupryna.url_shortener.service;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.repository.UrlRepository;
 import com.chupryna.url_shortener.util.Base62Encoder;
+import com.chupryna.url_shortener.util.IdObfuscator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,6 +21,7 @@ public class UrlService {
     private final UrlRepository urlRepository;
     private final Base62Encoder base62Encoder;
     private final StringRedisTemplate redisTemplate;
+    private final IdObfuscator idObfuscator;
 
     public String shortenUrl(String originalUrl) {
         String normalizedUrl = normalizeUrl(originalUrl);
@@ -28,7 +30,9 @@ public class UrlService {
         url.setOriginalUrl(normalizedUrl);
 
         Url savedUrl = urlRepository.save(url);
-        String shortCode = base62Encoder.encode(savedUrl.getId());
+
+        long obfuscatedId = idObfuscator.obfuscate(savedUrl.getId());
+        String shortCode = base62Encoder.encode(obfuscatedId);
 
         redisTemplate.opsForValue().set(shortCode, normalizedUrl, CACHE_TTL);
 
@@ -42,7 +46,9 @@ public class UrlService {
             return cacheUrl;
         }
 
-        long id = base62Encoder.decode(shortCode);
+        long obfuscatedId = base62Encoder.decode(shortCode);
+        long id = idObfuscator.deobfuscate(obfuscatedId);
+
         String originalUrl = urlRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Url not found"))
                 .getOriginalUrl();

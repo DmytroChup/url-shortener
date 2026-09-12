@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
+@DisplayName("Base62Encoder Unit Tests")
 public class Base62EncoderTest {
 
     private Base62Encoder base62Encoder;
