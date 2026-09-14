@@ -6,9 +6,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @DisplayName("Base62Encoder Unit Tests")
 public class Base62EncoderTest {
@@ -52,5 +54,20 @@ public class Base62EncoderTest {
     })
     void baseDecodeTests(String shortUrl, long id) {
         assertEquals(id, base62Encoder.decode(shortUrl));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"   ", "\t", "\n"})
+    @DisplayName("Should throw IllegalArgumentException when shortUrl is null or blank")
+    void decode_NullOrBlank_ThrowsException(String shortUrl) {
+        assertThrows(IllegalArgumentException.class, () -> base62Encoder.decode(shortUrl));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc@123", "a-b", "test#", "привет", "🔥", "hello world", "日本語"})
+    @DisplayName("Should throw IllegalArgumentException when shortUrl contains invalid characters")
+    void decode_InvalidCharacters_ThrowsException(String invalidCode) {
+        assertThrows(IllegalArgumentException.class, () -> base62Encoder.decode(invalidCode));
     }
 }

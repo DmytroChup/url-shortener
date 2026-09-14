@@ -9,6 +9,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,7 +48,7 @@ public class UrlServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     @Test
@@ -127,5 +129,24 @@ public class UrlServiceTest {
         assertEquals(shortCode, foundShortCode);
         verify(urlRepository).save(argThat(url -> normalizedUrl.equals(url.getOriginalUrl())));
         verify(valueOperations).set(eq(shortCode), eq(normalizedUrl), any(Duration.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "ftp://example.com",
+            "mailto:admin@example.com",
+            "tel:+12345",
+            "javascript:alert(1)",
+            "http:example.com",
+            "https://",
+            "http://",
+            "https://   "
+    })
+    @DisplayName("Should throw IllegalArgumentException and NOT touch database or cache when URL is invalid")
+    void shortenUrl_InvalidUrl_ThrowsExceptionAndNeverPersists(String invalidUrl) {
+        assertThrows(IllegalArgumentException.class, () -> urlService.shortenUrl(invalidUrl));
+
+        verify(urlRepository, never()).save(any());
+        verify(valueOperations, never()).set(any(String.class), any(String.class), any(Duration.class));
     }
 }
