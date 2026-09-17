@@ -2,14 +2,14 @@ package com.chupryna.url_shortener.service;
 
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.repository.UrlRepository;
-import com.chupryna.url_shortener.util.Base62Encoder;
-import com.chupryna.url_shortener.util.IdObfuscator;
+import com.chupryna.url_shortener.util.RandomShortCodeGenerator;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -32,16 +32,13 @@ public class UrlServiceTest {
     private UrlRepository urlRepository;
 
     @Mock
-    private Base62Encoder base62Encoder;
-
-    @Mock
     private StringRedisTemplate redisTemplate;
 
     @Mock
     private ValueOperations<String, String> valueOperations;
 
     @Mock
-    private IdObfuscator idObfuscator;
+    private RandomShortCodeGenerator codeGenerator;
 
     @InjectMocks
     private UrlService urlService;
@@ -54,34 +51,29 @@ public class UrlServiceTest {
     @Test
     @DisplayName("Should return URL from Redis cache without querying database on cache hit")
     void getOriginalUrl_CacheHit() {
-        String shortCode = "b";
+        String shortCode = "aB7xK9q";
         String originalUrl = "https://example.com";
         when(valueOperations.get(shortCode)).thenReturn(originalUrl);
 
         String actualUrl = urlService.getOriginalUrl(shortCode);
 
         assertEquals(originalUrl, actualUrl);
-        verify(urlRepository, never()).findById(any());
-
+        verify(urlRepository, never()).findByShortCode(any());
     }
 
     @Test
     @DisplayName("Should fetch URL from database and populate Redis cache on cache miss")
     void getOriginalUrl_CacheMiss() {
-        String shortCode = "b";
+        String shortCode = "aB7xK9q";
         String originalUrl = "https://example.com";
-        long obfuscatedId = 123456L;
-        long realId = 1L;
-
-        when(valueOperations.get(shortCode)).thenReturn(null);
-        when(base62Encoder.decode(shortCode)).thenReturn(obfuscatedId);
-        when(idObfuscator.deobfuscate(obfuscatedId)).thenReturn(realId);
 
         Url entity = new Url();
         entity.setId(1L);
+        entity.setShortCode(shortCode);
         entity.setOriginalUrl(originalUrl);
 
-        when(urlRepository.findById(realId)).thenReturn(Optional.of(entity));
+        when(valueOperations.get(shortCode)).thenReturn(null);
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(entity));
 
         String actualUrl = urlService.getOriginalUrl(shortCode);
 
@@ -93,14 +85,10 @@ public class UrlServiceTest {
     @Test
     @DisplayName("Should throw EntityNotFoundException when short code does not exist in cache or database")
     void getOriginalUrl_NotFound() {
-        String shortCode = "b";
-        long obfuscatedId = 999L;
-        long realId = 50L;
+        String shortCode = "unknown";
 
         when(valueOperations.get(shortCode)).thenReturn(null);
-        when(base62Encoder.decode(shortCode)).thenReturn(obfuscatedId);
-        when(idObfuscator.deobfuscate(obfuscatedId)).thenReturn(realId);
-        when(urlRepository.findById(realId)).thenReturn(Optional.empty());
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.empty());
 
         assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
 
@@ -110,25 +98,52 @@ public class UrlServiceTest {
     @Test
     @DisplayName("Should normalize URL, persist entity, generate Base62 code, and warm up cache")
     void shortenUrl_Success() {
-        String shortCode = "b";
+        String shortCode = "aB7xK9q";
         String badUrl = "example.com";
         String normalizedUrl = "https://example.com";
-        long realId = 1L;
-        long obfuscatedId = 123456L;
 
         Url savedEntity = new Url();
-        savedEntity.setId(realId);
+        savedEntity.setId(1L);
+        savedEntity.setShortCode(shortCode);
         savedEntity.setOriginalUrl(normalizedUrl);
 
+        when(codeGenerator.generate()).thenReturn(shortCode);
+        when(urlRepository.existsByShortCode(shortCode)).thenReturn(false);
         when(urlRepository.save(any(Url.class))).thenReturn(savedEntity);
-        when(idObfuscator.obfuscate(realId)).thenReturn(obfuscatedId);
-        when(base62Encoder.encode(obfuscatedId)).thenReturn(shortCode);
 
         String foundShortCode = urlService.shortenUrl(badUrl);
 
         assertEquals(shortCode, foundShortCode);
-        verify(urlRepository).save(argThat(url -> normalizedUrl.equals(url.getOriginalUrl())));
+        verify(urlRepository).save(argThat(url -> normalizedUrl.equals(url.getOriginalUrl()) &&
+                shortCode.equals(url.getShortCode())));
         verify(valueOperations).set(eq(shortCode), eq(normalizedUrl), any(Duration.class));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "google.com,           https://google.com",
+            "localhost:8080,       https://localhost:8080",
+            "example.com:8080/x,   https://example.com:8080/x",
+            "http://example.com,   http://example.com",
+            "HTTPS://Example.com,  HTTPS://Example.com"
+    })
+    @DisplayName("Should normalize URL correctly before persisting and caching")
+    void shortenUrl_NormalizesUrlCorrectly(String inputUrl, String expectedNormalizedUrl) {
+        String shortCode = "aB7xK9q";
+
+        when(codeGenerator.generate()).thenReturn(shortCode);
+        when(urlRepository.existsByShortCode(shortCode)).thenReturn(false);
+        when(urlRepository.save(any(Url.class))).thenAnswer(inv -> {
+            Url url = inv.getArgument(0);
+            url.setId(1L);
+            return url;
+        });
+
+        urlService.shortenUrl(inputUrl);
+
+        verify(urlRepository).save(argThat(url ->
+                expectedNormalizedUrl.equals(url.getOriginalUrl())));
+        verify(valueOperations).set(eq(shortCode), eq(expectedNormalizedUrl), any(Duration.class));
     }
 
     @ParameterizedTest

@@ -2,8 +2,7 @@ package com.chupryna.url_shortener.service;
 
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.repository.UrlRepository;
-import com.chupryna.url_shortener.util.Base62Encoder;
-import com.chupryna.url_shortener.util.IdObfuscator;
+import com.chupryna.url_shortener.util.RandomShortCodeGenerator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,23 +19,23 @@ public class UrlService {
 
     private static final Duration CACHE_TTL = Duration.ofDays(1);
     private static final Pattern SCHEME_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:(//|[^0-9]).*");
+    private static final int MAX_COLLISION_RETRIES = 5;
 
     private final UrlRepository urlRepository;
-    private final Base62Encoder base62Encoder;
+    private final RandomShortCodeGenerator codeGenerator;
     private final StringRedisTemplate redisTemplate;
-    private final IdObfuscator idObfuscator;
 
     public String shortenUrl(String originalUrl) {
         String normalizedUrl = normalizeUrl(originalUrl);
         validateUrl(normalizedUrl);
 
+        String shortCode = generateUniqueShortCode();
+
         Url url = new Url();
+        url.setShortCode(shortCode);
         url.setOriginalUrl(normalizedUrl);
 
-        Url savedUrl = urlRepository.save(url);
-
-        long obfuscatedId = idObfuscator.obfuscate(savedUrl.getId());
-        String shortCode = base62Encoder.encode(obfuscatedId);
+        urlRepository.save(url);
 
         redisTemplate.opsForValue().set(shortCode, normalizedUrl, CACHE_TTL);
 
@@ -50,16 +49,24 @@ public class UrlService {
             return cacheUrl;
         }
 
-        long obfuscatedId = base62Encoder.decode(shortCode);
-        long id = idObfuscator.deobfuscate(obfuscatedId);
-
-        String originalUrl = urlRepository.findById(id)
+        String originalUrl = urlRepository.findByShortCode(shortCode)
                 .orElseThrow(() -> new EntityNotFoundException("Url not found"))
                 .getOriginalUrl();
 
         redisTemplate.opsForValue().set(shortCode, originalUrl, CACHE_TTL);
 
         return originalUrl;
+    }
+
+    private String generateUniqueShortCode() {
+        for (int i = 0; i < MAX_COLLISION_RETRIES; i++) {
+            String candidate = codeGenerator.generate();
+            if (!urlRepository.existsByShortCode(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("Failed to generate unique short code after " + MAX_COLLISION_RETRIES +
+                "attempts");
     }
 
     private String normalizeUrl(String originalUrl) {
