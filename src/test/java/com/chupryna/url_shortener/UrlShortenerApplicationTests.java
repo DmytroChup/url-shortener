@@ -12,8 +12,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import java.util.Random;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class UrlShortenerApplicationTests extends BaseIntegrationTest {
@@ -75,13 +77,22 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @Test
     @DisplayName("Should return 429 Too Many Requests when rate limit is exceeded")
     void shouldReturnTooManyRequestsWhenRateLimitExceeded() throws Exception {
-        String clientIp = "192.168.1.100";
+        String clientIp = "192.168.1." + new Random().nextInt(200, 255);
 
         for (int i = 0; i < 10; i++) {
-            mockMvc.perform(get("/api/v1/test").header("X-Forwarded-For", clientIp));
+            mockMvc.perform(get("/api/v1/test")
+                    .with(request -> {
+                        request.setRemoteAddr(clientIp);
+                        return request;
+                    }))
+                    .andExpect(status().isNotFound());
         }
 
-        mockMvc.perform(get("/api/v1/test").header("X-Forwarded-For", clientIp))
+        mockMvc.perform(get("/api/v1/test")
+                        .with(request -> {
+                            request.setRemoteAddr(clientIp);
+                            return request;
+                        }))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.status").value(429))
                 .andExpect(jsonPath("$.title").value("Too Many Requests"));
