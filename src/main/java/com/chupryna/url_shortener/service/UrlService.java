@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 public class UrlService {
 
     private static final Duration CACHE_TTL = Duration.ofDays(1);
+    private static final String CACHE_PREFIX = "url:";
     private static final Pattern SCHEME_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:(//|[^0-9]).*");
     private static final int MAX_COLLISION_RETRIES = 5;
 
@@ -37,13 +38,13 @@ public class UrlService {
 
         urlRepository.save(url);
 
-        redisTemplate.opsForValue().set(shortCode, normalizedUrl, CACHE_TTL);
+        redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, normalizedUrl, CACHE_TTL);
 
         return shortCode;
     }
 
     public String getOriginalUrl(String shortCode) {
-        String cacheUrl = redisTemplate.opsForValue().get(shortCode);
+        String cacheUrl = redisTemplate.opsForValue().get(CACHE_PREFIX + shortCode);
 
         if(cacheUrl != null) {
             return cacheUrl;
@@ -53,7 +54,7 @@ public class UrlService {
                 .orElseThrow(() -> new EntityNotFoundException("Url not found"))
                 .getOriginalUrl();
 
-        redisTemplate.opsForValue().set(shortCode, originalUrl, CACHE_TTL);
+        redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, originalUrl, CACHE_TTL);
 
         return originalUrl;
     }

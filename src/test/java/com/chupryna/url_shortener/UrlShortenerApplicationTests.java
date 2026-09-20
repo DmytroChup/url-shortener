@@ -36,14 +36,10 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @Autowired
     private UrlRepository urlRepository;
 
-    @Autowired
-    private RateLimitingService rateLimitingService;
-
     @BeforeEach
     void setUp() {
         urlRepository.deleteAll();
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
-        rateLimitingService.reset();
     }
 
     @Test

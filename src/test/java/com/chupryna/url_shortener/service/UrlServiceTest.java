@@ -28,6 +28,8 @@ import static org.mockito.Mockito.*;
 @DisplayName("UrlService Unit Tests")
 public class UrlServiceTest {
 
+    private static final String CACHE_PREFIX = "url:";
+
     @Mock
     private UrlRepository urlRepository;
 
@@ -53,7 +55,7 @@ public class UrlServiceTest {
     void getOriginalUrl_CacheHit() {
         String shortCode = "aB7xK9q";
         String originalUrl = "https://example.com";
-        when(valueOperations.get(shortCode)).thenReturn(originalUrl);
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn(originalUrl);
 
         String actualUrl = urlService.getOriginalUrl(shortCode);
 
@@ -72,14 +74,14 @@ public class UrlServiceTest {
         entity.setShortCode(shortCode);
         entity.setOriginalUrl(originalUrl);
 
-        when(valueOperations.get(shortCode)).thenReturn(null);
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn(null);
         when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(entity));
 
         String actualUrl = urlService.getOriginalUrl(shortCode);
 
         assertEquals(originalUrl, actualUrl);
 
-        verify(valueOperations).set(eq(shortCode), eq(originalUrl), any(Duration.class));
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(originalUrl), any(Duration.class));
     }
 
     @Test
@@ -87,7 +89,7 @@ public class UrlServiceTest {
     void getOriginalUrl_NotFound() {
         String shortCode = "unknown";
 
-        when(valueOperations.get(shortCode)).thenReturn(null);
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn(null);
         when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.empty());
 
         assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
@@ -116,7 +118,7 @@ public class UrlServiceTest {
         assertEquals(shortCode, foundShortCode);
         verify(urlRepository).save(argThat(url -> normalizedUrl.equals(url.getOriginalUrl()) &&
                 shortCode.equals(url.getShortCode())));
-        verify(valueOperations).set(eq(shortCode), eq(normalizedUrl), any(Duration.class));
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(normalizedUrl), any(Duration.class));
     }
 
     @ParameterizedTest
@@ -143,7 +145,7 @@ public class UrlServiceTest {
 
         verify(urlRepository).save(argThat(url ->
                 expectedNormalizedUrl.equals(url.getOriginalUrl())));
-        verify(valueOperations).set(eq(shortCode), eq(expectedNormalizedUrl), any(Duration.class));
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(expectedNormalizedUrl), any(Duration.class));
     }
 
     @ParameterizedTest

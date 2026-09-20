@@ -2,34 +2,34 @@ package com.chupryna.url_shortener.service;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@RequiredArgsConstructor
 public class RateLimitingService {
 
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private static final String KEY_PREFIX = "rate-limit:";
 
-    private Bucket createNewBucket() {
+    private final ProxyManager<String> proxyManager;
+
+    private static BucketConfiguration createBucketConfiguration()  {
         Bandwidth limit = Bandwidth.builder()
-                .capacity(10)
-                .refillGreedy(10, Duration.ofMinutes(1))
+                .capacity(10L)
+                .refillGreedy(10L, Duration.ofMinutes(1L))
                 .build();
 
-        return Bucket.builder()
+        return BucketConfiguration.builder()
                 .addLimit(limit)
                 .build();
     }
 
     public boolean tryConsume(String ip) {
-        Bucket bucket = buckets.computeIfAbsent(ip, k -> createNewBucket());
+        Bucket bucket = proxyManager.builder().build(KEY_PREFIX + ip, RateLimitingService::createBucketConfiguration);
         return bucket.tryConsume(1);
-    }
-
-    public void reset() {
-        buckets.clear();
     }
 }
