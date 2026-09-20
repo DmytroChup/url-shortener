@@ -28,4 +28,8 @@ public class RateLimitingService {
         Bucket bucket = buckets.computeIfAbsent(ip, k -> createNewBucket());
         return bucket.tryConsume(1);
     }
+
+    public void reset() {
+        buckets.clear();
+    }
 }

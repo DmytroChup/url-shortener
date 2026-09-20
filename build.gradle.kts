@@ -46,6 +46,7 @@ dependencies {
 	testImplementation("org.testcontainers:junit-jupiter:1.21.4")
 	testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
 	testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
+	testImplementation("org.awaitility:awaitility:4.3.0")
 
 	mockitoAgent("org.mockito:mockito-core") { isTransitive = false }
 }
