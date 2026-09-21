@@ -5,6 +5,8 @@ import com.chupryna.url_shortener.repository.UrlRepository;
 import com.chupryna.url_shortener.util.RandomShortCodeGenerator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -15,32 +17,28 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UrlService {
 
     private static final Duration CACHE_TTL = Duration.ofDays(1);
     private static final String CACHE_PREFIX = "url:";
     private static final Pattern SCHEME_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:(//|[^0-9]).*");
-    private static final int MAX_COLLISION_RETRIES = 5;
+    private static final int MAX_SAVE_RETRIES = 5;
 
     private final UrlRepository urlRepository;
     private final RandomShortCodeGenerator codeGenerator;
     private final StringRedisTemplate redisTemplate;
+    private final UrlPersister urlPersister;
 
     public String shortenUrl(String originalUrl) {
         String normalizedUrl = normalizeUrl(originalUrl);
         validateUrl(normalizedUrl);
 
-        String shortCode = generateUniqueShortCode();
+        Url savedUrl = saveWithRetryOnCollision(normalizedUrl);
 
-        Url url = new Url();
-        url.setShortCode(shortCode);
-        url.setOriginalUrl(normalizedUrl);
+        redisTemplate.opsForValue().set(CACHE_PREFIX + savedUrl.getShortCode(), normalizedUrl, CACHE_TTL);
 
-        urlRepository.save(url);
-
-        redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, normalizedUrl, CACHE_TTL);
-
-        return shortCode;
+        return savedUrl.getShortCode();
     }
 
     public String getOriginalUrl(String shortCode) {
@@ -59,15 +57,24 @@ public class UrlService {
         return originalUrl;
     }
 
-    private String generateUniqueShortCode() {
-        for (int i = 0; i < MAX_COLLISION_RETRIES; i++) {
-            String candidate = codeGenerator.generate();
-            if (!urlRepository.existsByShortCode(candidate)) {
-                return candidate;
+    private Url saveWithRetryOnCollision(String normalizedUrl) {
+        for (int attempt = 0; attempt < MAX_SAVE_RETRIES; attempt++) {
+            String candidateCode = codeGenerator.generate();
+
+            Url url = new Url();
+            url.setShortCode(candidateCode);
+            url.setOriginalUrl(normalizedUrl);
+
+            try {
+                return urlPersister.persist(url);
+            } catch (DataIntegrityViolationException e) {
+                log.warn("Short code collision for code: {}, retrying (attempt {}/{})",
+                        candidateCode, attempt + 1, MAX_SAVE_RETRIES);
             }
         }
-        throw new IllegalStateException("Failed to generate unique short code after " + MAX_COLLISION_RETRIES +
-                "attempts");
+
+        throw new IllegalStateException(
+                "Failed to generate unique short code after " + MAX_SAVE_RETRIES + " attempts");
     }
 
     private String normalizeUrl(String originalUrl) {

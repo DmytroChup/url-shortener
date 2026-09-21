@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -41,6 +42,9 @@ public class UrlServiceTest {
 
     @Mock
     private RandomShortCodeGenerator codeGenerator;
+
+    @Mock
+    private UrlPersister urlPersister;
 
     @InjectMocks
     private UrlService urlService;
@@ -110,13 +114,12 @@ public class UrlServiceTest {
         savedEntity.setOriginalUrl(normalizedUrl);
 
         when(codeGenerator.generate()).thenReturn(shortCode);
-        when(urlRepository.existsByShortCode(shortCode)).thenReturn(false);
-        when(urlRepository.save(any(Url.class))).thenReturn(savedEntity);
+        when(urlPersister.persist(any(Url.class))).thenReturn(savedEntity);
 
         String foundShortCode = urlService.shortenUrl(badUrl);
 
         assertEquals(shortCode, foundShortCode);
-        verify(urlRepository).save(argThat(url -> normalizedUrl.equals(url.getOriginalUrl()) &&
+        verify(urlPersister).persist(argThat(url -> normalizedUrl.equals(url.getOriginalUrl()) &&
                 shortCode.equals(url.getShortCode())));
         verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(normalizedUrl), any(Duration.class));
     }
@@ -134,8 +137,7 @@ public class UrlServiceTest {
         String shortCode = "aB7xK9q";
 
         when(codeGenerator.generate()).thenReturn(shortCode);
-        when(urlRepository.existsByShortCode(shortCode)).thenReturn(false);
-        when(urlRepository.save(any(Url.class))).thenAnswer(inv -> {
+        when(urlPersister.persist(any(Url.class))).thenAnswer(inv -> {
             Url url = inv.getArgument(0);
             url.setId(1L);
             return url;
@@ -143,7 +145,7 @@ public class UrlServiceTest {
 
         urlService.shortenUrl(inputUrl);
 
-        verify(urlRepository).save(argThat(url ->
+        verify(urlPersister).persist(argThat(url ->
                 expectedNormalizedUrl.equals(url.getOriginalUrl())));
         verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(expectedNormalizedUrl), any(Duration.class));
     }
@@ -164,6 +166,51 @@ public class UrlServiceTest {
         assertThrows(IllegalArgumentException.class, () -> urlService.shortenUrl(invalidUrl));
 
         verify(urlRepository, never()).save(any());
+        verify(valueOperations, never()).set(any(String.class), any(String.class), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should retry with a new short code and succeed when collision occurs")
+    void shortenUrl_Collision_RetriesAndSucceeds() {
+        String originalUrl = "https://example.com";
+        String firstCode = "first12";
+        String secondCode = "second9";
+
+        when(codeGenerator.generate()).thenReturn(firstCode, secondCode);
+
+        Url savedEntity = new Url();
+        savedEntity.setId(1L);
+        savedEntity.setShortCode(secondCode);
+        savedEntity.setOriginalUrl(originalUrl);
+
+        when(urlPersister.persist(any(Url.class)))
+                .thenThrow(new DataIntegrityViolationException("Duplicate key"))
+                .thenReturn(savedEntity);
+
+        String result = urlService.shortenUrl(originalUrl);
+
+        assertEquals(secondCode, result);
+
+        verify(codeGenerator, times(2)).generate();
+        verify(urlPersister, times(2)).persist(any(Url.class));
+
+        verify(valueOperations).set(eq(CACHE_PREFIX + secondCode), eq(originalUrl), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalStateException when max collision retries are exhausted")
+    void shortenUrl_MaxRetriesExhausted_ThrowsIllegalStateException() {
+        String normalizedUrl = "https://example.com";
+        String shortCode = "dummyCode";
+
+        when(codeGenerator.generate()).thenReturn(shortCode);
+        when(urlPersister.persist(any(Url.class))).thenThrow(new DataIntegrityViolationException("Duplicate key"));
+
+        assertThrows(IllegalStateException.class, () -> urlService.shortenUrl(normalizedUrl));
+
+        verify(codeGenerator, times(5)).generate();
+        verify(urlPersister, times(5)).persist(any(Url.class));
+
         verify(valueOperations, never()).set(any(String.class), any(String.class), any(Duration.class));
     }
 }
