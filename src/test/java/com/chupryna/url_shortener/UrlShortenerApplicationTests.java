@@ -81,23 +81,62 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 429 Too Many Requests when rate limit is exceeded")
+    @DisplayName("Should return 429 Too Many Requests when write rate limit is exceeded")
     void rateLimit_ExceededRequests_ReturnsTooManyRequests() throws Exception {
         String clientIp = "192.168.1." + new Random().nextInt(200, 255);
+        UrlRequest request = new UrlRequest("https://example.com");
+        String requestJson = objectMapper.writeValueAsString(request);
 
         for (int i = 0; i < 10; i++) {
-            mockMvc.perform(get("/api/v1/test")
-                    .with(request -> {
-                        request.setRemoteAddr(clientIp);
-                        return request;
-                    }))
+            mockMvc.perform(post("/api/v1/shorten")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestJson)
+                            .with(req -> {
+                                req.setRemoteAddr(clientIp);
+                                return req;
+                            }))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(post("/api/v1/shorten")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson)
+                        .with(req -> {
+                            req.setRemoteAddr(clientIp);
+                            return req;
+                        }))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.title").value("Too Many Requests"));
+
+        // Verify that even after blocking POST requests,
+        // a GET request from the same IP is not blocked (does not return 429)
+        mockMvc.perform(get("/api/v1/notfnd1")
+                        .with(req -> {
+                            req.setRemoteAddr(clientIp);
+                            return req;
+                        }))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should return 429 Too Many Requests when read rate limit is exceeded (100 requests)")
+    void rateLimit_ReadLimitExceeded_ReturnsTooManyRequests() throws Exception {
+        String clientIp = "192.168.2." + new Random().nextInt(200, 255);
+
+        for (int i = 0; i < 100; i++) {
+            mockMvc.perform(get("/api/v1/notfnd1")
+                            .with(req -> {
+                                req.setRemoteAddr(clientIp);
+                                return req;
+                            }))
                     .andExpect(status().isNotFound());
         }
 
-        mockMvc.perform(get("/api/v1/test")
-                        .with(request -> {
-                            request.setRemoteAddr(clientIp);
-                            return request;
+        mockMvc.perform(get("/api/v1/notfnd1")
+                        .with(req -> {
+                            req.setRemoteAddr(clientIp);
+                            return req;
                         }))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.status").value(429))

@@ -19,8 +19,13 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws
             Exception {
         String clientIp = extractClientIp(request);
+        boolean isWrite = "POST".equalsIgnoreCase(request.getMethod());
 
-        if (!rateLimitingService.tryConsume(clientIp)) {
+        boolean allowed = isWrite
+                ? rateLimitingService.tryConsumeWrite(clientIp)
+                : rateLimitingService.tryConsumeRead(clientIp);
+
+        if (!allowed) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
             response.getWriter().write("""
