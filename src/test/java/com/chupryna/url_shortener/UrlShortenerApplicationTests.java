@@ -6,6 +6,8 @@ import com.chupryna.url_shortener.service.RateLimitingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -61,7 +63,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @Test
     @DisplayName("Should return 404 Not Found with ProblemDetail when short code does not exist")
     void redirect_ShortCodeNotFound_Returns404WithProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/v1/notfound"))
+        mockMvc.perform(get("/api/v1/notfnd1"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Url not found"));
     }
@@ -147,5 +149,13 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "toolongcode", "a!_bc_?", "     "})
+    @DisplayName("Should return 404 Not Found when short code format does not match 7-char Base62 regex")
+    void redirect_InvalidShortCodeFormat_FastFail(String shortCode) throws Exception {
+        mockMvc.perform(get("/api/v1/" + shortCode))
+                .andExpect(status().isNotFound());
     }
 }

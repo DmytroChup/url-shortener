@@ -30,6 +30,8 @@ import static org.mockito.Mockito.*;
 public class UrlServiceTest {
 
     private static final String CACHE_PREFIX = "url:";
+    private static final String NOT_FOUND_MARKER = "__NOT_FOUND__";
+    private static final Duration NEGATIVE_CACHE_TTL = Duration.ofSeconds(30);
 
     @Mock
     private UrlRepository urlRepository;
@@ -98,7 +100,7 @@ public class UrlServiceTest {
 
         assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
 
-        verify(valueOperations, never()).set(any(String.class), any(String.class), any(Duration.class));
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(NOT_FOUND_MARKER), eq(NEGATIVE_CACHE_TTL));
     }
 
     @Test
@@ -212,5 +214,17 @@ public class UrlServiceTest {
         verify(urlPersister, times(5)).persist(any(Url.class));
 
         verify(valueOperations, never()).set(any(String.class), any(String.class), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should throw EntityNotFoundException immediately when negative cache marker is present in Redis")
+    void getOriginalUrl_NegativeCacheHit() {
+        String shortCode = "unknown";
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn(NOT_FOUND_MARKER);
+
+        assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
+
+        verify(urlRepository, never()).findByShortCode(any());
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
     }
 }

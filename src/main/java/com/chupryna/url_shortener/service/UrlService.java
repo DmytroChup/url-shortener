@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 @Service
@@ -21,8 +22,12 @@ import java.util.regex.Pattern;
 public class UrlService {
 
     private static final Duration CACHE_TTL = Duration.ofDays(1);
+    private static final Duration NEGATIVE_CACHE_TTL = Duration.ofSeconds(30);
     private static final String CACHE_PREFIX = "url:";
+    private static final String NOT_FOUND_MARKER = "__NOT_FOUND__";
+
     private static final Pattern SCHEME_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:(//|[^0-9]).*");
+    private static final Pattern SHORT_CODE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{7}$");
     private static final int MAX_SAVE_RETRIES = 5;
 
     private final UrlRepository urlRepository;
@@ -42,19 +47,35 @@ public class UrlService {
     }
 
     public String getOriginalUrl(String shortCode) {
+        validateShortCode(shortCode);
+
         String cacheUrl = redisTemplate.opsForValue().get(CACHE_PREFIX + shortCode);
 
         if(cacheUrl != null) {
+            if (NOT_FOUND_MARKER.equals(cacheUrl)) {
+                throw new EntityNotFoundException("Url not found");
+            }
             return cacheUrl;
         }
 
-        String originalUrl = urlRepository.findByShortCode(shortCode)
-                .orElseThrow(() -> new EntityNotFoundException("Url not found"))
-                .getOriginalUrl();
+        Optional<Url> urlOptional = urlRepository.findByShortCode(shortCode);
+
+        if (urlOptional.isEmpty()) {
+            redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, NOT_FOUND_MARKER, NEGATIVE_CACHE_TTL);
+            throw new EntityNotFoundException("Url not found");
+        }
+
+        String originalUrl = urlOptional.get().getOriginalUrl();
 
         redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, originalUrl, CACHE_TTL);
 
         return originalUrl;
+    }
+
+    private void validateShortCode(String shortCode) {
+        if (shortCode == null || !SHORT_CODE_PATTERN.matcher(shortCode).matches()) {
+            throw new IllegalArgumentException("Invalid short code format");
+        }
     }
 
     private Url saveWithRetryOnCollision(String normalizedUrl) {

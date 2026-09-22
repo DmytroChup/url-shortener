@@ -51,7 +51,7 @@ public class UrlController {
     }
 
 
-    @GetMapping("/{shortCode}")
+    @GetMapping("/{shortCode:[a-zA-Z0-9]{7}}")
     @Operation(
             summary = "Redirect to original URL",
             description = "Resolve original URL from Redis cache (or PostgreSQL on cache miss) " +
@@ -92,7 +92,7 @@ public class UrlController {
     }
 
     // TODO: add owner authorization
-    @GetMapping("/{shortCode}/analytics")
+    @GetMapping("/{shortCode:[a-zA-Z0-9]{7}}/analytics")
     @Operation(
             summary = "Get click analytics for short URL",
             description = "Returns total click count, short code, and destination original URL. " +
