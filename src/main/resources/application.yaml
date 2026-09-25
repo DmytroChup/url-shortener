@@ -11,3 +11,9 @@ app:
   cleanup:
     cron: "0 0 2 * * *"
     grace-period-days: 30
+  url:
+    cache-ttl: 1d
+    negative-cache-ttl: 30s
+    expired-cache-ttl: 30m
+    default-ttl-days: 30
+    max-save-retries: 5

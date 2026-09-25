@@ -1,5 +1,6 @@
 package com.chupryna.url_shortener.service;
 
+import com.chupryna.url_shortener.config.properties.UrlProperties;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.exception.LinkExpiredException;
 import com.chupryna.url_shortener.repository.UrlRepository;
@@ -23,19 +24,14 @@ import java.util.regex.Pattern;
 @Slf4j
 public class UrlService {
 
-    private static final Duration CACHE_TTL = Duration.ofDays(1);
-    static final Duration NEGATIVE_CACHE_TTL = Duration.ofSeconds(30);
     static final String CACHE_PREFIX = "url:";
     static final String NOT_FOUND_MARKER = "__NOT_FOUND__";
-
-    private static final String EXPIRED_MARKER = "__EXPIRED__";
-    private static final Duration EXPIRED_CACHE_TTL = Duration.ofMinutes(30);
+    static final String EXPIRED_MARKER = "__EXPIRED__";
 
     private static final Pattern SCHEME_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*:(//|[^0-9]).*");
     private static final Pattern SHORT_CODE_PATTERN = Pattern.compile("^[a-zA-Z0-9]{7}$");
-    private static final int MAX_SAVE_RETRIES = 5;
-    private static final Integer DEFAULT_TTL_DAYS = 30;
 
+    private final UrlProperties urlProperties;
     private final UrlRepository urlRepository;
     private final RandomShortCodeGenerator codeGenerator;
     private final StringRedisTemplate redisTemplate;
@@ -74,12 +70,12 @@ public class UrlService {
         Optional<Url> urlOptional = urlRepository.findByShortCode(shortCode);
 
         if (urlOptional.isEmpty()) {
-            redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, NOT_FOUND_MARKER, NEGATIVE_CACHE_TTL);
+            redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, NOT_FOUND_MARKER, urlProperties.negativeCacheTtl());
             throw new EntityNotFoundException("Url not found");
         }
 
         if(urlOptional.get().getExpiresAt() != null && urlOptional.get().getExpiresAt().isBefore(Instant.now())) {
-            redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, EXPIRED_MARKER, EXPIRED_CACHE_TTL);
+            redisTemplate.opsForValue().set(CACHE_PREFIX + shortCode, EXPIRED_MARKER, urlProperties.expiredCacheTtl());
             throw new LinkExpiredException("This link has been expired");
         }
 
@@ -98,26 +94,26 @@ public class UrlService {
     }
 
     private Url saveWithRetryOnCollision(String normalizedUrl, Integer ttlDays) {
-        for (int attempt = 0; attempt < MAX_SAVE_RETRIES; attempt++) {
+        for (int attempt = 0; attempt < urlProperties.maxSaveRetries(); attempt++) {
             String candidateCode = codeGenerator.generate();
 
             Url url = new Url();
             url.setShortCode(candidateCode);
             url.setOriginalUrl(normalizedUrl);
             url.setExpiresAt(ttlDays == null ?
-                    Instant.now().plus(Duration.ofDays(DEFAULT_TTL_DAYS)) :
+                    Instant.now().plus(Duration.ofDays(urlProperties.defaultTtlDays())) :
                     Instant.now().plus(Duration.ofDays(ttlDays)));
 
             try {
                 return urlPersister.persist(url);
             } catch (DataIntegrityViolationException e) {
                 log.warn("Short code collision for code: {}, retrying (attempt {}/{})",
-                        candidateCode, attempt + 1, MAX_SAVE_RETRIES);
+                        candidateCode, attempt + 1, urlProperties.maxSaveRetries());
             }
         }
 
         throw new IllegalStateException(
-                "Failed to generate unique short code after " + MAX_SAVE_RETRIES + " attempts");
+                "Failed to generate unique short code after " + urlProperties.maxSaveRetries() + " attempts");
     }
 
     private String normalizeUrl(String originalUrl) {
@@ -147,7 +143,7 @@ public class UrlService {
 
     private Duration calculateCacheTtl(Instant expiresAt) {
         if(expiresAt == null) {
-            return CACHE_TTL;
+            return urlProperties.cacheTtl();
         }
 
         Duration remaining =  Duration.between(Instant.now(), expiresAt);
@@ -156,6 +152,6 @@ public class UrlService {
             return Duration.ZERO;
         }
 
-        return remaining.compareTo(CACHE_TTL) < 0 ? remaining : CACHE_TTL;
+        return remaining.compareTo(urlProperties.cacheTtl()) < 0 ? remaining : urlProperties.cacheTtl();
     }
 }

@@ -1,5 +1,6 @@
 package com.chupryna.url_shortener.service;
 
+import com.chupryna.url_shortener.config.properties.UrlProperties;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.exception.LinkExpiredException;
 import com.chupryna.url_shortener.repository.UrlRepository;
@@ -13,7 +14,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -47,12 +47,27 @@ public class UrlServiceTest {
     @Mock
     private UrlPersister urlPersister;
 
-    @InjectMocks
+    private final UrlProperties urlProperties = new UrlProperties(
+            Duration.ofDays(1),
+            Duration.ofSeconds(30),
+            Duration.ofMinutes(30),
+            30,
+            5
+    );
+
     private UrlService urlService;
 
     @BeforeEach
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        urlService = new UrlService(
+                urlProperties,
+                urlRepository,
+                codeGenerator,
+                redisTemplate,
+                urlPersister
+        );
     }
 
     @Test
@@ -99,7 +114,7 @@ public class UrlServiceTest {
 
         assertThrows(EntityNotFoundException.class, () -> urlService.getOriginalUrl(shortCode));
 
-        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(NOT_FOUND_MARKER), eq(NEGATIVE_CACHE_TTL));
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq(NOT_FOUND_MARKER), eq(urlProperties.negativeCacheTtl()));
     }
 
     @Test
