@@ -2,9 +2,8 @@ package com.chupryna.url_shortener.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "url_clicks")
@@ -23,7 +22,7 @@ public class UrlClick {
     private String shortCode;
 
     @Column(updatable = false, nullable = false)
-    private LocalDateTime clickedAt;
+    private Instant clickedAt;
 
     @Column(length = 512)
     private String userAgent;

@@ -51,4 +51,10 @@ public class GlobalExceptionHandler {
         return ProblemDetail
                 .forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
     }
+
+    @ExceptionHandler(LinkExpiredException.class)
+    public ProblemDetail handleLinkExpired(LinkExpiredException ex) {
+        return ProblemDetail
+                .forStatusAndDetail(HttpStatus.GONE, ex.getMessage());
+    }
 }

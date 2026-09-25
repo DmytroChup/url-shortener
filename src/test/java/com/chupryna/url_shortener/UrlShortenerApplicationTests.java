@@ -1,8 +1,8 @@
 package com.chupryna.url_shortener;
 
 import com.chupryna.url_shortener.dto.UrlRequest;
+import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.repository.UrlRepository;
-import com.chupryna.url_shortener.service.RateLimitingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class UrlShortenerApplicationTests extends BaseIntegrationTest {
+
+    private static final String CACHE_PREFIX = "url:";
 
     @Autowired
     private MockMvc mockMvc;
@@ -196,5 +199,25 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     void redirect_InvalidShortCodeFormat_FastFail(String shortCode) throws Exception {
         mockMvc.perform(get("/api/v1/" + shortCode))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should return 410 Gone once TTL naturally expires in both DB and Redis")
+    void redirect_ShortTtlLink_ExpiresNaturallyInCacheAndDatabase() throws Exception {
+        Url url = new Url();
+        url.setShortCode("zTest01");
+        url.setOriginalUrl("https://example.com/short-ttl-test");
+        url.setExpiresAt(Instant.now().plus(Duration.ofSeconds(1)));
+        urlRepository.save(url);
+
+        mockMvc.perform(get("/api/v1/" + url.getShortCode()))
+                .andExpect(status().isFound());
+
+        await().atMost(Duration.ofSeconds(3))
+                .pollInterval(Duration.ofMillis(200))
+                .untilAsserted(() ->
+                        mockMvc.perform(get("/api/v1/" + url.getShortCode()))
+                                .andExpect(status().isGone())
+                );
     }
 }

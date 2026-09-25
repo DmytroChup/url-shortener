@@ -21,7 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @RestController()
 @RequestMapping("/api/v1")
@@ -46,7 +46,7 @@ public class UrlController {
             @ApiResponse(responseCode = "400", description = "Validation error or invalid request payload")
     })
     public ResponseEntity<String> shortenUrl(@RequestBody @Valid UrlRequest urlRequest) {
-        String shortCode = urlService.shortenUrl(urlRequest.url());
+        String shortCode = urlService.shortenUrl(urlRequest.url(), urlRequest.ttlDays());
         return ResponseEntity.ok(shortCode);
     }
 
@@ -82,7 +82,7 @@ public class UrlController {
                 shortCode,
                 request.getHeader("User-Agent"),
                 maskedIp,
-                LocalDateTime.now(),
+                Instant.now(),
                 request.getHeader("Referer"))
         );
         

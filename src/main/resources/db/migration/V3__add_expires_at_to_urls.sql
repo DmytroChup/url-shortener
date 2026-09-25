@@ -1,0 +1,8 @@
+ALTER TABLE urls
+    ADD COLUMN expires_at TIMESTAMP WITH TIME ZONE,
+    ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE;
+
+CREATE INDEX idx_urls_expires_at ON urls (expires_at) WHERE expires_at IS NOT NULL;
+
+ALTER TABLE url_clicks
+    ALTER COLUMN clicked_at TYPE TIMESTAMP WITH TIME ZONE;

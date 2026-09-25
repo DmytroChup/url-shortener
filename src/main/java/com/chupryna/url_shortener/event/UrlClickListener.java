@@ -8,7 +8,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Component
 @RequiredArgsConstructor
@@ -27,7 +27,7 @@ public class UrlClickListener {
                 .shortCode(event.shortCode())
                 .userAgent(truncate(event.userAgent(), MAX_USER_AGENT_LENGTH))
                 .maskedIpAddress(event.maskedIpAddress())
-                .clickedAt(event.clickedAt() != null ? event.clickedAt() : LocalDateTime.now())
+                .clickedAt(event.clickedAt() != null ? event.clickedAt() : Instant.now())
                 .referer(truncate(event.referer(), MAX_REFERER_LENGTH))
                 .build();
 

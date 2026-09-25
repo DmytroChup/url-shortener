@@ -1,6 +1,7 @@
 package com.chupryna.url_shortener.service;
 
 import com.chupryna.url_shortener.entity.Url;
+import com.chupryna.url_shortener.exception.LinkExpiredException;
 import com.chupryna.url_shortener.repository.UrlRepository;
 import com.chupryna.url_shortener.util.RandomShortCodeGenerator;
 import jakarta.persistence.EntityNotFoundException;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,19 +21,16 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static com.chupryna.url_shortener.service.UrlService.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UrlService Unit Tests")
 public class UrlServiceTest {
-
-    private static final String CACHE_PREFIX = "url:";
-    private static final String NOT_FOUND_MARKER = "__NOT_FOUND__";
-    private static final Duration NEGATIVE_CACHE_TTL = Duration.ofSeconds(30);
 
     @Mock
     private UrlRepository urlRepository;
@@ -226,5 +225,83 @@ public class UrlServiceTest {
 
         verify(urlRepository, never()).findByShortCode(any());
         verify(valueOperations, never()).set(any(), any(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should set expiresAt based on custom ttlDays when creating a link")
+    void shortenUrl_WithCustomTtl_SetsExpiresAtCorrectly() {
+        String shortCode = "aB7xK9q";
+        int ttlDays = 10;
+
+        when(codeGenerator.generate()).thenReturn(shortCode);
+        when(urlPersister.persist(any(Url.class))).thenAnswer(inv -> {
+            Url url = inv.getArgument(0);
+            url.setId(1L);
+            return url;
+        });
+
+        Instant before = Instant.now();
+        urlService.shortenUrl("https://example.com", ttlDays);
+        Instant after = Instant.now();
+
+        ArgumentCaptor<Url> captor = ArgumentCaptor.forClass(Url.class);
+        verify(urlPersister).persist(captor.capture());
+
+        Instant expiresAt = captor.getValue().getExpiresAt();
+        Instant expectedMin = before.plus(Duration.ofDays(ttlDays));
+        Instant expectedMax = after.plus(Duration.ofDays(ttlDays));
+
+        assertTrue(!expiresAt.isBefore(expectedMin) && !expiresAt.isAfter(expectedMax));
+    }
+
+    @Test
+    @DisplayName("Should default to 30 days expiration when ttlDays is not provided")
+    void shortenUrl_WithoutTtl_DefaultsTo30Days() {
+        String shortCode = "aB7xK9q";
+
+        when(codeGenerator.generate()).thenReturn(shortCode);
+        when(urlPersister.persist(any(Url.class))).thenAnswer(inv -> {
+            Url url = inv.getArgument(0);
+            url.setId(1L);
+            return url;
+        });
+
+        urlService.shortenUrl("https://example.com");
+
+        ArgumentCaptor<Url> captor = ArgumentCaptor.forClass(Url.class);
+        verify(urlPersister).persist(captor.capture());
+
+        Instant expiresAt = captor.getValue().getExpiresAt();
+        Instant expectedApprox = Instant.now().plus(Duration.ofDays(30));
+
+        assertTrue(Duration.between(expiresAt, expectedApprox).abs().toMinutes() < 1);
+    }
+
+    @Test
+    @DisplayName("Should throw LinkExpiredException when short code exists but has expired")
+    void getOriginalUrl_ExpiredLink_ThrowsLinkExpiredException() {
+        String shortCode = "aB7xK9q";
+        Url expiredUrl = new Url();
+        expiredUrl.setShortCode(shortCode);
+        expiredUrl.setOriginalUrl("https://example.com");
+        expiredUrl.setExpiresAt(Instant.now().minus(Duration.ofDays(1))); // истекло вчера
+
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn(null);
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(expiredUrl));
+
+        assertThrows(LinkExpiredException.class, () -> urlService.getOriginalUrl(shortCode));
+
+        verify(valueOperations).set(eq(CACHE_PREFIX + shortCode), eq("__EXPIRED__"), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should throw LinkExpiredException from cache without querying database when EXPIRED marker is cached")
+    void getOriginalUrl_ExpiredMarkerInCache_ThrowsWithoutDbQuery() {
+        String shortCode = "aB7xK9q";
+        when(valueOperations.get(CACHE_PREFIX + shortCode)).thenReturn("__EXPIRED__");
+
+        assertThrows(LinkExpiredException.class, () -> urlService.getOriginalUrl(shortCode));
+
+        verify(urlRepository, never()).findByShortCode(any());
     }
 }
