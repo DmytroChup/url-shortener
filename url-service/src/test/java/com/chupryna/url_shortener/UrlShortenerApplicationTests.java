@@ -163,7 +163,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
 
     @Test
     @DisplayName("Should shorten URL, redirect, and record click analytics end-to-end")
-    void fullFlow_ShortenRedirectAndTrackAnalytics() throws Exception {
+    void fullFlow_ShortenAndRedirect() throws Exception {
         UrlRequest request = new UrlRequest("https://example.com/some/long/path");
 
         MvcResult shortenResult = mockMvc.perform(post("/api/v1/shorten")
@@ -180,21 +180,6 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                     .andExpect(status().isFound())
                     .andExpect(header().string("Location", "https://example.com/some/long/path"));
         }
-
-        await().atMost(Duration.ofSeconds(3))
-                .pollInterval(Duration.ofMillis(150))
-                .untilAsserted(() -> mockMvc.perform(get("/api/v1/" + shortCode + "/analytics"))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.shortCode").value(shortCode))
-                        .andExpect(jsonPath("$.originalUrl").value("https://example.com/some/long/path"))
-                        .andExpect(jsonPath("$.totalClicks").value(3)));
-    }
-
-    @Test
-    @DisplayName("Should return 404 when requesting analytics for unknown short code")
-    void analytics_UnknownShortCode_Returns404() throws Exception {
-        mockMvc.perform(get("/api/v1/zzzzzzz/analytics"))
-                .andExpect(status().isNotFound());
     }
 
     @Test

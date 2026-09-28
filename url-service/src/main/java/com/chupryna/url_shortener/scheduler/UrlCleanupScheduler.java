@@ -1,6 +1,5 @@
 package com.chupryna.url_shortener.scheduler;
 
-import com.chupryna.url_shortener.repository.UrlClickRepository;
 import com.chupryna.url_shortener.repository.UrlRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +18,6 @@ import java.util.List;
 public class UrlCleanupScheduler {
 
     private final UrlRepository urlRepository;
-    private final UrlClickRepository urlClickRepository;
 
     @Value("${app.cleanup.grace-period-days:30}")
     private long gracePeriodDays;
@@ -36,11 +34,10 @@ public class UrlCleanupScheduler {
             return;
         }
 
-        int deletedClicks = urlClickRepository.deleteByShortCodeIn(expiredCodes);
         int deletedUrls = urlRepository.deleteByExpiresAtBefore(cutoff);
 
-        log.info("Purged {} expired links (older than {} days) and {} associated click records",
-                deletedUrls, gracePeriodDays, deletedClicks);
+        log.info("Purged {} expired links (older than {} days)",
+                deletedUrls, gracePeriodDays);
     }
 
 }

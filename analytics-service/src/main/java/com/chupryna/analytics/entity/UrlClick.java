@@ -1,4 +1,4 @@
-package com.chupryna.url_shortener.entity;
+package com.chupryna.analytics.entity;
 
 import jakarta.persistence.*;
 import lombok.*;

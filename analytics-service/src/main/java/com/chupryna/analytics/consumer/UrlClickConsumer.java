@@ -1,11 +1,12 @@
-package com.chupryna.url_shortener.event;
+package com.chupryna.analytics.consumer;
 
-import com.chupryna.url_shortener.entity.UrlClick;
-import com.chupryna.url_shortener.repository.UrlClickRepository;
+import com.chupryna.analytics.entity.UrlClick;
+import com.chupryna.analytics.repository.UrlClickRepository;
+import com.chupryna.url_shortener.event.KafkaTopics;
+import com.chupryna.url_shortener.event.UrlClickEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -13,16 +14,17 @@ import java.time.Instant;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class UrlClickListener {
+public class UrlClickConsumer {
 
     private static final int MAX_REFERER_LENGTH = 2048;
     private static final int MAX_USER_AGENT_LENGTH = 512;
 
     private final UrlClickRepository urlClickRepository;
 
-    @Async("taskExecutor")
-    @KafkaListener(topics = KafkaTopics.URL_CLICKS, groupId = "url-shortener-group")
-    public void handleUrlClickEvent(UrlClickEvent event) {
+    @KafkaListener(topics = KafkaTopics.URL_CLICKS, groupId = "analytics-group")
+    public void consume(UrlClickEvent event) {
+        log.info("Received click event for shortCode: {}", event.shortCode());
+
         UrlClick urlClick = UrlClick.builder()
                 .shortCode(event.shortCode())
                 .userAgent(truncate(event.userAgent(), MAX_USER_AGENT_LENGTH))
@@ -31,11 +33,7 @@ public class UrlClickListener {
                 .referer(truncate(event.referer(), MAX_REFERER_LENGTH))
                 .build();
 
-        try {
-            urlClickRepository.save(urlClick);
-        } catch (Exception e) {
-            log.error("Failed to record click analytics for shortCode: {}", event.shortCode(), e);
-        }
+        urlClickRepository.save(urlClick);
     }
 
     private String truncate(String value, int maxLength) {

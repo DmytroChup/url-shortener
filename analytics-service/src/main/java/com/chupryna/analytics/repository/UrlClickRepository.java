@@ -1,6 +1,6 @@
-package com.chupryna.url_shortener.repository;
+package com.chupryna.analytics.repository;
 
-import com.chupryna.url_shortener.entity.UrlClick;
+import com.chupryna.analytics.entity.UrlClick;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

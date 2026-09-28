@@ -1,10 +1,8 @@
 package com.chupryna.url_shortener.controller;
 
-import com.chupryna.url_shortener.dto.UrlAnalyticsResponse;
 import com.chupryna.url_shortener.dto.UrlRequest;
 import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
-import com.chupryna.url_shortener.service.UrlAnalyticsService;
 import com.chupryna.url_shortener.service.UrlService;
 import com.chupryna.url_shortener.util.IpMasker;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,7 +30,6 @@ import java.time.Instant;
 public class UrlController {
 
     private final UrlService urlService;
-    private final UrlAnalyticsService urlAnalyticsService;
     private final KafkaTemplate<String, UrlClickEvent> kafkaTemplate;
     private final IpMasker ipMasker;
 
@@ -90,24 +87,6 @@ public class UrlController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(target)
                 .build();
-    }
-
-    // TODO: add owner authorization
-    @GetMapping("/{shortCode:[a-zA-Z0-9]{7}}/analytics")
-    @Operation(
-            summary = "Get click analytics for short URL",
-            description = "Returns total click count, short code, and destination original URL. " +
-                    "Throws 404 if the code does not exist."
-    )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Analytics retrieved successfully"),
-            @ApiResponse(responseCode = "404", description = "Short URL not found")
-    })
-    public ResponseEntity<UrlAnalyticsResponse> getUrlAnalytics(
-            @Parameter(description = "Unique Base62 short code", example = "aB7xK9q")
-            @PathVariable String shortCode
-    ) {
-        return ResponseEntity.ok(urlAnalyticsService.getAnalytics(shortCode));
     }
 
     private String extractClientIp(HttpServletRequest request) {

@@ -1,8 +1,7 @@
-package com.chupryna.url_shortener.dto;
+package com.chupryna.analytics.dto;
 
 public record UrlAnalyticsResponse(
         String shortCode,
-        String originalUrl,
         long totalClicks
 ) {
 }
