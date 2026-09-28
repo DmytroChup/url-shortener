@@ -1,5 +1,6 @@
 package com.chupryna.url_shortener.interceptor;
 
+import com.chupryna.url_shortener.exception.RateLimitExceededException;
 import com.chupryna.url_shortener.service.RateLimitingService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,16 +27,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
                 : rateLimitingService.tryConsumeRead(clientIp);
 
         if (!allowed) {
-            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-            response.getWriter().write("""
-                    {
-                        "title": "Too Many Requests",
-                        "status": 429,
-                        "detail": "Rate limit exceeded. Try again later."
-                    }
-                """);
-            return false;
+            throw new RateLimitExceededException("Rate limit exceeded. Try again later.");
         }
 
         return true;

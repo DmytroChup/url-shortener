@@ -4,6 +4,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -17,11 +18,16 @@ public class BaseIntegrationTest {
     );
 
     @ServiceConnection(name = "redis")
-    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:latest"))
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:8.8.3-alpine"))
             .withExposedPorts(6379);
+
+    @ServiceConnection
+    static KafkaContainer kafka = new KafkaContainer(
+            DockerImageName.parse("apache/kafka:4.3.1"));
 
     static {
         postgres.start();
         redis.start();
+        kafka.start();
     }
 }

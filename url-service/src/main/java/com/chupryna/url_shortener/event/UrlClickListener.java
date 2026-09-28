@@ -4,7 +4,7 @@ import com.chupryna.url_shortener.entity.UrlClick;
 import com.chupryna.url_shortener.repository.UrlClickRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +21,7 @@ public class UrlClickListener {
     private final UrlClickRepository urlClickRepository;
 
     @Async("taskExecutor")
-    @EventListener
+    @KafkaListener(topics = KafkaTopics.URL_CLICKS, groupId = "url-shortener-group")
     public void handleUrlClickEvent(UrlClickEvent event) {
         UrlClick urlClick = UrlClick.builder()
                 .shortCode(event.shortCode())

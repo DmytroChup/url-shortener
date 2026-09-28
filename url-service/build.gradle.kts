@@ -24,6 +24,7 @@ dependencies {
 	implementation("com.bucket4j:bucket4j-redis:8.10.1")
 	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	implementation("org.flywaydb:flyway-database-postgresql")
+	implementation("org.springframework.boot:spring-boot-starter-kafka")
 
 	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-docker-compose")
@@ -41,8 +42,10 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:junit-jupiter:1.21.4")
 	testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
+	testImplementation("org.testcontainers:testcontainers-kafka")
 	testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
 	testImplementation("org.awaitility:awaitility:4.3.0")
+	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 
 	mockitoAgent("org.mockito:mockito-core") { isTransitive = false }
 }

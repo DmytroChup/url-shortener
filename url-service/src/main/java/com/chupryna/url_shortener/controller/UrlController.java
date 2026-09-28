@@ -2,6 +2,7 @@ package com.chupryna.url_shortener.controller;
 
 import com.chupryna.url_shortener.dto.UrlAnalyticsResponse;
 import com.chupryna.url_shortener.dto.UrlRequest;
+import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
 import com.chupryna.url_shortener.service.UrlAnalyticsService;
 import com.chupryna.url_shortener.service.UrlService;
@@ -15,9 +16,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
@@ -32,7 +33,7 @@ public class UrlController {
 
     private final UrlService urlService;
     private final UrlAnalyticsService urlAnalyticsService;
-    private final ApplicationEventPublisher applicationEventPublisher;
+    private final KafkaTemplate<String, UrlClickEvent> kafkaTemplate;
     private final IpMasker ipMasker;
 
     @PostMapping("/shorten")
@@ -78,7 +79,7 @@ public class UrlController {
             throw new IllegalStateException("Stored URL is malformed");
         }
 
-        applicationEventPublisher.publishEvent(new UrlClickEvent(
+        kafkaTemplate.send(KafkaTopics.URL_CLICKS, shortCode, new UrlClickEvent(
                 shortCode,
                 request.getHeader("User-Agent"),
                 maskedIp,

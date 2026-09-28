@@ -1,6 +1,8 @@
 services:
-  app:
-    build: .
+  url-service:
+    build:
+      context: .
+      dockerfile: url-service/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -9,9 +11,11 @@ services:
       - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}'
       - 'SPRING_JPA_HIBERNATE_DDL_AUTO=validate'
       - 'SPRING_DATA_REDIS_HOST=redis'
+      - 'KAFKA_BOOTSTRAP_SERVERS=kafka:9092'
     depends_on:
       - postgres
       - redis
+      - kafka
 
   postgres:
     image: postgres:16-alpine
@@ -24,12 +28,12 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
   redis:
-    image: redis:latest
+    image: redis:8.8.3-alpine
     ports:
       - '6379:6379'
 
   kafka:
-    image: apache/kafka:latest
+    image: apache/kafka:4.3.1
     container_name: kafka
     ports:
       - '9092:9092'

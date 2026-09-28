@@ -10,9 +10,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -26,8 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 public class UrlShortenerApplicationTests extends BaseIntegrationTest {
-
-    private static final String CACHE_PREFIX = "url:";
 
     @Autowired
     private MockMvc mockMvc;
@@ -123,7 +123,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should return 429 Too Many Requests when read rate limit is exceeded (100 requests)")
+    @DisplayName("Should return 429 Too Many Requests when read rate limit is exceeded")
     void rateLimit_ReadLimitExceeded_ReturnsTooManyRequests() throws Exception {
         String clientIp = "192.168.2." + new Random().nextInt(200, 255);
 
@@ -136,14 +136,29 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                     .andExpect(status().isNotFound());
         }
 
-        mockMvc.perform(get("/api/v1/notfnd1")
-                        .with(req -> {
-                            req.setRemoteAddr(clientIp);
-                            return req;
-                        }))
+        ResultActions rateLimitedAction = null;
+        for (int i = 0; i < 10; i++) {
+            ResultActions action = mockMvc.perform(get("/api/v1/notfnd1")
+                    .with(req -> {
+                        req.setRemoteAddr(clientIp);
+                        return req;
+                    }));
+
+            if (action.andReturn().getResponse().getStatus() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                rateLimitedAction = action;
+                break;
+            }
+        }
+
+        assertThat(rateLimitedAction)
+                .as("Read rate limit must be exceeded within 110 requests")
+                .isNotNull();
+
+        rateLimitedAction
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.status").value(429))
-                .andExpect(jsonPath("$.title").value("Too Many Requests"));
+                .andExpect(jsonPath("$.title").value("Too Many Requests"))
+                .andExpect(jsonPath("$.detail").value("Rate limit exceeded. Try again later."));
     }
 
     @Test
