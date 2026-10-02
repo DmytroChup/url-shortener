@@ -13,10 +13,11 @@ spring:
       server:
         webflux:
           routes:
-            - id: url-service-api
+            - id: url-service-shorten
               uri: ${URL_SERVICE_URL:http://localhost:8081}
               predicates:
                 - Path=/api/v1/urls/**
+                - Method=POST
               filters:
                 - name: RequestRateLimiter
                   args:
@@ -28,6 +29,7 @@ spring:
               predicates:
                 - Path=/{shortCode:[a-zA-Z0-9]+}
               filters:
+                - PrefixPath=/api/v1/urls
                 - name: RequestRateLimiter
                   args:
                     rate-limiter: "#{@readRateLimiter}"
@@ -37,3 +39,11 @@ spring:
               uri: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/v1/analytics/**
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      zipkin:
+        endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}

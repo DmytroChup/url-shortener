@@ -10,10 +10,12 @@ services:
       - 'ANALYTICS_SERVICE_URL=http://analytics-service:8082'
       - 'SPRING_DATA_REDIS_HOST=redis'
       - 'SPRING_DATA_REDIS_PORT=6379'
+      - 'MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans'
     depends_on:
       - url-service
       - analytics-service
       - redis
+      - zipkin
 
   url-service:
     build:
@@ -28,10 +30,12 @@ services:
       - 'SPRING_JPA_HIBERNATE_DDL_AUTO=validate'
       - 'SPRING_DATA_REDIS_HOST=redis'
       - 'KAFKA_BOOTSTRAP_SERVERS=kafka:9092'
+      - 'MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans'
     depends_on:
       - postgres
       - redis
       - kafka
+      - zipkin
 
   analytics-service:
     build:
@@ -45,9 +49,11 @@ services:
       - 'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}'
       - 'SPRING_JPA_HIBERNATE_DDL_AUTO=validate'
       - 'KAFKA_BOOTSTRAP_SERVERS=kafka:9092'
+      - 'MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans'
     depends_on:
       - postgres
       - kafka
+      - zipkin
 
   postgres:
     image: postgres:16-alpine
@@ -86,6 +92,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  zipkin:
+    image: openzipkin/zipkin:3.6.1
+    container_name: zipkin
+    ports:
+      - "9411:9411"
 
 volumes:
   postgres-data:

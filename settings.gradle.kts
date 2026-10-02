@@ -1,15 +1,5 @@
 rootProject.name = "url-shortener"
 
-include("contracts")
-
-if (rootDir.resolve("url-service").isDirectory) {
-    include("url-service")
-}
-
-if (rootDir.resolve("analytics-service").isDirectory) {
-    include("analytics-service")
-}
-
-if (rootDir.resolve("api-gateway").isDirectory) {
-    include("api-gateway")
-}
+listOf("contracts", "url-service", "analytics-service", "api-gateway")
+    .filter { rootDir.resolve(it).isDirectory }
+    .forEach { include(it) }

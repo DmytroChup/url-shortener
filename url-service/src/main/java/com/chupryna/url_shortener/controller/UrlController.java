@@ -23,7 +23,7 @@ import java.net.URI;
 import java.time.Instant;
 
 @RestController()
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/urls")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "URL Shortener", description = "Endpoints for managing short URLs and redirects")

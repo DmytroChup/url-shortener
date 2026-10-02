@@ -51,14 +51,14 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @DisplayName("Should successfully shorten URL and perform 302 redirect to original destination")
     void shorten_ValidUrl_RedirectsToOriginalDestination() throws Exception {
         UrlRequest request = new UrlRequest("https://google.com");
-        MvcResult result = mockMvc.perform(post("/api/v1/shorten")
+        MvcResult result = mockMvc.perform(post("/api/v1/urls/shorten")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andReturn();
 
         String shortCode = result.getResponse().getContentAsString();
-        mockMvc.perform(get("/api/v1/" + shortCode))
+        mockMvc.perform(get("/api/v1/urls/" + shortCode))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "https://google.com"));
     }
@@ -66,7 +66,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @Test
     @DisplayName("Should return 404 Not Found with ProblemDetail when short code does not exist")
     void redirect_ShortCodeNotFound_Returns404WithProblemDetail() throws Exception {
-        mockMvc.perform(get("/api/v1/notfnd1"))
+        mockMvc.perform(get("/api/v1/urls/notfnd1"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Url not found"));
     }
@@ -76,7 +76,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     void shorten_EmptyUrl_ReturnsBadRequest() throws Exception {
         UrlRequest invalidRequest = new UrlRequest("");
 
-        mockMvc.perform(post("/api/v1/shorten")
+        mockMvc.perform(post("/api/v1/urls/shorten")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -88,7 +88,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     void fullFlow_ShortenAndRedirect() throws Exception {
         UrlRequest request = new UrlRequest("https://example.com/some/long/path");
 
-        MvcResult shortenResult = mockMvc.perform(post("/api/v1/shorten")
+        MvcResult shortenResult = mockMvc.perform(post("/api/v1/urls/shorten")
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -98,7 +98,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
         assertThat(shortCode).hasSize(7);
 
         for (int i = 0; i < 3; i++) {
-            mockMvc.perform(get("/api/v1/" + shortCode))
+            mockMvc.perform(get("/api/v1/urls/" + shortCode))
                     .andExpect(status().isFound())
                     .andExpect(header().string("Location", "https://example.com/some/long/path"));
         }
@@ -109,7 +109,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     void shorten_InvalidUrl_Returns400() throws Exception {
         UrlRequest request = new UrlRequest("javascript:alert(1)");
 
-        mockMvc.perform(post("/api/v1/shorten")
+        mockMvc.perform(post("/api/v1/urls/shorten")
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -119,7 +119,7 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @ValueSource(strings = {"abc", "toolongcode", "a!_bc_?", "     "})
     @DisplayName("Should return 404 Not Found when short code format does not match 7-char Base62 regex")
     void redirect_InvalidShortCodeFormat_FastFail(String shortCode) throws Exception {
-        mockMvc.perform(get("/api/v1/" + shortCode))
+        mockMvc.perform(get("/api/v1/urls/" + shortCode))
                 .andExpect(status().isNotFound());
     }
 
@@ -132,13 +132,13 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
         url.setExpiresAt(Instant.now().plus(Duration.ofSeconds(1)));
         urlRepository.save(url);
 
-        mockMvc.perform(get("/api/v1/" + url.getShortCode()))
+        mockMvc.perform(get("/api/v1/urls/" + url.getShortCode()))
                 .andExpect(status().isFound());
 
         await().atMost(Duration.ofSeconds(3))
                 .pollInterval(Duration.ofMillis(200))
                 .untilAsserted(() ->
-                        mockMvc.perform(get("/api/v1/" + url.getShortCode()))
+                        mockMvc.perform(get("/api/v1/urls/" + url.getShortCode()))
                                 .andExpect(status().isGone())
                 );
     }
