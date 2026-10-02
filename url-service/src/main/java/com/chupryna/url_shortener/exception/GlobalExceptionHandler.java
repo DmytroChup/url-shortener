@@ -57,12 +57,4 @@ public class GlobalExceptionHandler {
         return ProblemDetail
                 .forStatusAndDetail(HttpStatus.GONE, ex.getMessage());
     }
-
-    @ExceptionHandler(RateLimitExceededException.class)
-    public ProblemDetail handleLinkExpired(RateLimitExceededException ex) {
-        ProblemDetail problem = ProblemDetail
-                .forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
-        problem.setTitle("Too Many Requests");
-        return problem;
-    }
 }

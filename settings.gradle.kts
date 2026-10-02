@@ -9,3 +9,7 @@ if (rootDir.resolve("url-service").isDirectory) {
 if (rootDir.resolve("analytics-service").isDirectory) {
     include("analytics-service")
 }
+
+if (rootDir.resolve("api-gateway").isDirectory) {
+    include("api-gateway")
+}

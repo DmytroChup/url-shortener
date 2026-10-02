@@ -6,17 +6,16 @@ COPY gradle gradle
 COPY build.gradle.kts .
 COPY settings.gradle.kts .
 
-COPY contracts contracts
-COPY url-service url-service
+COPY api-gateway api-gateway
 
 RUN chmod +x gradlew
-RUN ./gradlew :url-service:bootJar -x test
+RUN ./gradlew :api-gateway:bootJar -x test
 
 FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
-COPY --from=builder /app/url-service/build/libs/*.jar app.jar
+COPY --from=builder /app/api-gateway/build/libs/*.jar app.jar
 
-EXPOSE 8081
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,0 +1,39 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: url-service-api
+              uri: ${URL_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/urls/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@writeRateLimiter}"
+                    key-resolver: "#{@ipKeyResolver}"
+
+            - id: url-service-redirect
+              uri: ${URL_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/{shortCode:[a-zA-Z0-9]+}
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@readRateLimiter}"
+                    key-resolver: "#{@ipKeyResolver}"
+
+            - id: analytics-service-api
+              uri: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/v1/analytics/**
