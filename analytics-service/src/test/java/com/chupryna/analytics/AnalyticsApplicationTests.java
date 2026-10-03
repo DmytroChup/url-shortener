@@ -3,15 +3,19 @@ package com.chupryna.analytics;
 import com.chupryna.analytics.repository.UrlClickRepository;
 import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,9 +35,56 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
     @Autowired
     private UrlClickRepository urlClickRepository;
 
+    private final BlockingQueue<ConsumerRecord<String, UrlClickEvent>> dltRecords = new LinkedBlockingQueue<>();
+
     @BeforeEach
     void setUp() {
         urlClickRepository.deleteAll();
+        dltRecords.clear();
+    }
+
+    @KafkaListener(topics = KafkaTopics.URL_CLICKS_DLT, groupId = "dlt-test-group")
+    void consumeDlt(ConsumerRecord<String, UrlClickEvent> record) {
+        dltRecords.add(record);
+    }
+
+    @Test
+    @DisplayName("Should route poison pill event to DLT and continue processing subsequent valid events")
+    void consume_PoisonPillEvent_RoutesToDltWithoutBlockingPartition() throws Exception {
+        String poisonCode = "poison1";
+
+        UrlClickEvent poisonPill = new UrlClickEvent(
+                null,
+                poisonCode,
+                "Mozilla/5.0",
+                "192.168.1.1",
+                Instant.now(),
+                "https://google.com"
+        );
+
+        kafkaTemplate.send(KafkaTopics.URL_CLICKS, poisonCode, poisonPill);
+
+        ConsumerRecord<String, UrlClickEvent> dltRecord = dltRecords.poll(10, TimeUnit.SECONDS);
+        assertThat(dltRecord).isNotNull();
+        assertThat(dltRecord.value().shortCode()).isEqualTo(poisonCode);
+
+        assertThat(urlClickRepository.countByShortCode(poisonCode)).isZero();
+
+        String validCode = "valid01";
+        UrlClickEvent validEvent = new UrlClickEvent(
+                UUID.randomUUID(),
+                validCode,
+                "Mozilla/5.0",
+                "192.168.1.1",
+                Instant.now(),
+                "https://google.com"
+        );
+        kafkaTemplate.send(KafkaTopics.URL_CLICKS, validCode, validEvent);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            long count = urlClickRepository.countByShortCode(validCode);
+            assertThat(count).isEqualTo(1);
+        });
     }
 
     @Test
