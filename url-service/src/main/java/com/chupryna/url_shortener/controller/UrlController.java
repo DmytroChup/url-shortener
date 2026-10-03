@@ -1,7 +1,6 @@
 package com.chupryna.url_shortener.controller;
 
 import com.chupryna.url_shortener.dto.UrlRequest;
-import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
 import com.chupryna.url_shortener.service.OutboxService;
 import com.chupryna.url_shortener.service.UrlService;

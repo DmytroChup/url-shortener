@@ -6,6 +6,7 @@ import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -23,9 +24,20 @@ public class UrlClickConsumer {
 
     @KafkaListener(topics = KafkaTopics.URL_CLICKS, groupId = "analytics-group")
     public void consume(UrlClickEvent event) {
-        log.info("Received click event for shortCode: {}", event.shortCode());
+        if (event.eventId() == null) {
+            log.error("Received click event without eventId for shortCode: {}", event.shortCode());
+            throw new IllegalArgumentException("eventId is required for idempotent processing");
+        }
+
+        log.info("Received click event for shortCode: {}, eventId: {}", event.shortCode(), event.eventId());
+
+        if (urlClickRepository.existsByEventId(event.eventId())) {
+            log.warn("Duplicate click event (eventId={}), skipping (fast-path)", event.eventId());
+            return;
+        }
 
         UrlClick urlClick = UrlClick.builder()
+                .eventId(event.eventId())
                 .shortCode(event.shortCode())
                 .userAgent(truncate(event.userAgent(), MAX_USER_AGENT_LENGTH))
                 .maskedIpAddress(event.maskedIpAddress())
@@ -33,7 +45,11 @@ public class UrlClickConsumer {
                 .referer(truncate(event.referer(), MAX_REFERER_LENGTH))
                 .build();
 
-        urlClickRepository.save(urlClick);
+        try {
+            urlClickRepository.save(urlClick);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Duplicate click event (eventId={}), safely ignored by DB constraint", event.eventId());
+        }
     }
 
     private String truncate(String value, int maxLength) {

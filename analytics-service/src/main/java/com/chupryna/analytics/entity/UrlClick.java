@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "url_clicks")
@@ -17,6 +18,9 @@ public class UrlClick {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false, unique = true)
+    private UUID eventId;
 
     @Column(nullable = false, length = 10)
     private String shortCode;

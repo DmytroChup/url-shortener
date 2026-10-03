@@ -8,11 +8,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public interface UrlClickRepository extends JpaRepository<UrlClick, Long> {
 
     long countByShortCode(String shortCode);
+
+    boolean existsByEventId(UUID eventId);
 
     @Modifying(clearAutomatically = true)
     @Query("DELETE FROM UrlClick c WHERE c.shortCode IN :shortCodes")
