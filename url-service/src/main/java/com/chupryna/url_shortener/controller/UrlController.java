@@ -3,6 +3,7 @@ package com.chupryna.url_shortener.controller;
 import com.chupryna.url_shortener.dto.UrlRequest;
 import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
+import com.chupryna.url_shortener.service.OutboxService;
 import com.chupryna.url_shortener.service.UrlService;
 import com.chupryna.url_shortener.util.IpMasker;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,11 +17,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.UUID;
 
 @RestController()
 @RequestMapping("/api/v1/urls")
@@ -30,7 +31,7 @@ import java.time.Instant;
 public class UrlController {
 
     private final UrlService urlService;
-    private final KafkaTemplate<String, UrlClickEvent> kafkaTemplate;
+    private final OutboxService outboxService;
     private final IpMasker ipMasker;
 
     @PostMapping("/shorten")
@@ -76,13 +77,17 @@ public class UrlController {
             throw new IllegalStateException("Stored URL is malformed");
         }
 
-        kafkaTemplate.send(KafkaTopics.URL_CLICKS, shortCode, new UrlClickEvent(
+        UUID eventId = UUID.randomUUID();
+        UrlClickEvent urlClickEvent = new UrlClickEvent(
+                eventId,
                 shortCode,
                 request.getHeader("User-Agent"),
                 maskedIp,
                 Instant.now(),
-                request.getHeader("Referer"))
+                request.getHeader("Referer")
         );
+
+        outboxService.saveEvent("URL", shortCode, "URL_CLICK", urlClickEvent);
         
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(target)

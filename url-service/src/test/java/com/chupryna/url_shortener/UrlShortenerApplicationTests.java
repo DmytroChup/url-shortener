@@ -2,6 +2,8 @@ package com.chupryna.url_shortener;
 
 import com.chupryna.url_shortener.dto.UrlRequest;
 import com.chupryna.url_shortener.entity.Url;
+import com.chupryna.url_shortener.entity.outbox.OutboxStatus;
+import com.chupryna.url_shortener.repository.OutboxEventRepository;
 import com.chupryna.url_shortener.repository.UrlRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,16 +12,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -41,9 +40,13 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
     @Autowired
     private UrlRepository urlRepository;
 
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
     @BeforeEach
     void setUp() {
         urlRepository.deleteAll();
+        outboxEventRepository.deleteAll();
         redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
     }
 
@@ -102,6 +105,13 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                     .andExpect(status().isFound())
                     .andExpect(header().string("Location", "https://example.com/some/long/path"));
         }
+
+        await().atMost(Duration.ofSeconds(5))
+                .untilAsserted(() -> {
+                    var events = outboxEventRepository.findAll();
+                    assertThat(events).hasSize(3);
+                    assertThat(events).allMatch(e -> e.getStatus() == OutboxStatus.SENT && e.getSentAt() != null);
+                });
     }
 
     @Test

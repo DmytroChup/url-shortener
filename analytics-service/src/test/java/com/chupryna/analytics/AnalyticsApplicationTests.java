@@ -10,6 +10,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,7 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
 
         for (int i = 0; i < 3; i++) {
             UrlClickEvent event = new UrlClickEvent(
+                    UUID.randomUUID(),
                     shortCode,
                     "Mozilla/5.0",
                     "192.168.1.1",
