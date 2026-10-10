@@ -39,6 +39,16 @@ spring:
               uri: ${ANALYTICS_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/v1/analytics/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: analyticsCircuitBreaker
+                    fallbackUri: forward:/fallback/analytics
+                    statusCodes:
+                      - 500
+                      - 502
+                      - 503
+                      - 504
 
 management:
   tracing:
@@ -47,3 +57,20 @@ management:
     export:
       zipkin:
         endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 50
+    instances:
+      analyticsCircuitBreaker:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 3s
