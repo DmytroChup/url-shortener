@@ -1,4 +1,4 @@
-# ⚡ Distributed URL Shortener & Real-Time Analytics Platform
+# Distributed URL Shortener & Analytics Platform
 
 [![CI Pipeline](https://github.com/DmytroChup/url-shortener/actions/workflows/ci.yml/badge.svg)](https://github.com/DmytroChup/url-shortener/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk)
@@ -9,95 +9,97 @@
 ![Redis](https://img.shields.io/badge/Redis-8.8-red?logo=redis)
 ![Docker](https://img.shields.io/badge/Docker%20Compose-Ready-blue?logo=docker)
 
-A production-grade, highly scalable distributed microservices platform designed for high-throughput URL shortening and real-time clickstream analytics. 
+A distributed URL shortening and clickstream analytics service built with Spring Boot, Apache Kafka, Redis, and PostgreSQL. 
 
-The architecture strictly decouples the latency-critical redirect path from analytics computation using **Apache Kafka** and the **Transactional Outbox Pattern**, guaranteeing sub-millisecond lookup latency, zero data loss, and protection against cascading system failures.
+The service separates the latency-critical redirect path from event processing using the **Transactional Outbox Pattern**, and incorporates **Resilience4j circuit breaking**, **idempotent consumption**, and **distributed tracing via OpenZipkin**.
 
 ---
 
-## 🏛 System Architecture
+## Architecture
 
 ![System Architecture](assets/architecture.png)
 
----
+The platform is decomposed into three primary services:
 
-## 🎯 Key Distributed Systems Patterns
-
-### 1. Dual-Write Problem Solved: Transactional Outbox Pattern
-* **Challenge:** Updating PostgreSQL and publishing an event to Kafka across separate networks risks state inconsistency if either step fails (e.g., database commits but network times out before Kafka acknowledges).
-* **Implementation:** On each URL redirect, a `UrlClickEvent` is atomically persisted to a local `outbox_events` table within the same ACID database transaction. A background publisher polls the outbox table and streams events to Kafka with guaranteed **At-Least-Once Delivery**, marking them as processed upon broker ACK.
-
-### 2. Duplicate Delivery Prevention: Idempotent Consumer
-* **Challenge:** At-least-once message delivery, network retries, and Kafka consumer group rebalances inevitably produce duplicate events, which would corrupt click counts.
-* **Implementation:** Every published event carries an immutable `eventId` (UUID). The Analytics Service records processed event IDs in a dedicated `processed_events` table within the same transaction as the metric update. Duplicate events are safely acknowledged and skipped without side effects.
-
-### 3. Fault Isolation: Dead Letter Queue (DLQ / DLT)
-* **Challenge:** Malformed event payloads or unhandled runtime exceptions (Poison Pills) can trigger infinite consumer retry loops, blocking the partition offset and stalling all subsequent event processing.
-* **Implementation:** Configured a resilient Spring Kafka `DefaultErrorHandler` with exponential backoff. Messages exceeding the maximum retry threshold are automatically routed to `url-clicks.DLT` (Dead Letter Topic) for offline inspection and alerting.
-
-### 4. Cascade Failure Prevention: Resilience4j Circuit Breaker & Fallback
-* **Challenge:** Downtime, network partitions, or high latency in the Analytics Service must never degrade the API Gateway or impact the critical URL redirection path.
-* **Implementation:** Analytics routes in Spring Cloud Gateway are wrapped with a **Resilience4j Circuit Breaker**. If failure rates exceed 50%, the circuit trips open, immediately routing requests to a fallback controller that returns a standardized **RFC 7807 Problem Detail (503 Service Unavailable)** response without exhausting gateway worker threads.
-
-### 5. High-Performance Caching & Cache Penetration Defense
-* **Challenge:** High read traffic and malicious key-probing attacks (querying non-existent short codes) can bypass the cache and overload PostgreSQL.
-* **Implementation:** Employs the **Cache-Aside** pattern backed by Redis. Successful lookups are cached with a configurable TTL. Non-existent short codes are stored with a negative sentinel marker (`__NOT_FOUND__`) with a 5-minute TTL, eliminating database penetration attacks.
-
-### 6. Distributed Rate Limiting
-* **Implementation:** Spring Cloud Gateway integrates **Redis Token Bucket Rate Limiting** to protect endpoints against brute-force attacks and denial-of-service, enforcing separate rate limits for read redirects and write creation requests.
-
-### 7. End-to-End Distributed Tracing
-* **Implementation:** Fully instrumented with **Micrometer Tracing**, **Brave**, and **OpenZipkin**. Correlation IDs (`traceId` and `spanId`) propagate across HTTP requests, Gateway filters, and Kafka record headers, giving unified observability across asynchronous boundaries.
+* **API Gateway (`:8080`)**: Built on Spring Cloud Gateway (Netty). Handles path routing, Redis Token Bucket rate limiting, and circuit breaking for downstream analytics requests.
+* **URL Service (`:8081`)**: Manages Base62 link generation, Redis cache-aside lookups, and transactional persistence of click events into an Outbox table.
+* **Analytics Service (`:8082`)**: Consumes click events from Kafka, guarantees idempotent processing via unique event identifiers, routes poison pills to a Dead Letter Topic, and stores click statistics.
 
 ---
 
-## 📦 Project Structure
+## Distributed Systems & Resilience Patterns
 
-A clean, modular Gradle monorepo adhering to domain separation:
+### 1. Transactional Outbox (Dual-Write Prevention)
+Writing to PostgreSQL and publishing to Kafka within separate calls introduces potential state divergence if the network fails midway.  
+On every redirect, `UrlClickEvent` is stored inside the local `outbox_events` table within the same database transaction. An asynchronous worker polls unpublished events, pushes them to the `url-clicks` Kafka topic, and marks them processed upon broker acknowledgement.
+
+### 2. Idempotent Consumer
+Kafka provides at-least-once delivery semantics, meaning network retries or consumer group rebalances can cause duplicated event delivery.  
+The consumer tracks incoming `eventId` (UUID) values within a `processed_events` table. Duplicate events are acknowledged and discarded without updating click counts.
+
+### 3. Dead Letter Topic (DLT / Poison Pill Isolation)
+Unparseable payloads or unexpected deserialization errors can block partition offsets and halt consumer progress.  
+A custom `DefaultErrorHandler` with exponential backoff intercepts failing records and redirects unrecoverable events to `url-clicks.DLT`, allowing the main consumer loop to proceed uninterrupted.
+
+### 4. Circuit Breaker & Fallback
+To prevent cascading service degradation, the API Gateway protects analytics routes with **Resilience4j**. If downstream failure rates exceed 50%, the gateway opens the circuit and immediately responds with an **RFC 7807 Problem Detail (503 Service Unavailable)** fallback without blocking worker threads.
+
+### 5. Cache Penetration Protection
+Direct database queries for non-existent short codes can exhaust database connections under high traffic or scanning attacks.  
+When a short code is not found, a negative cache entry (`__NOT_FOUND__`) is written to Redis with a short 5-minute TTL, absorbing subsequent misses directly in memory.
+
+### 6. Distributed Tracing
+All HTTP requests, reactive Gateway filters, and asynchronous Kafka messages propagate W3C/B3 trace headers instrumented via **Micrometer Tracing** and **Brave**, with visualization in **OpenZipkin**.
+
+---
+
+## Repository Layout
 
 ```
 url-shortener/
-├── api-gateway/         # Spring Cloud Gateway (Routing, Redis Rate Limiting, Circuit Breaker)
-├── contracts/           # Shared Java records, DTOs, and Kafka event definitions
-├── url-service/         # Core domain service (Base62 hashing, Redis Cache-Aside, Transactional Outbox)
-├── analytics-service/   # Async consumer (Idempotent processing, click metrics, DLQ error handler)
-├── docker/              # Docker initialization SQL scripts and container configs
-├── .github/workflows/   # CI/CD pipeline (Tests with Testcontainers & parallel Docker builds)
-├── compose.yaml         # Production-grade multi-container orchestrator
-└── settings.gradle.kts  # Gradle multi-module root definition
+├── api-gateway/         # Reactive gateway, rate limiting, circuit breaker fallback
+├── contracts/           # Shared domain events (UrlClickEvent) and DTOs
+├── url-service/         # Base62 shortening, Redis cache-aside, Outbox publisher
+├── analytics-service/   # Kafka consumer, idempotent processing, DLT routing
+├── docker/              # Multi-database init scripts
+├── load-tests/          # k6 load testing benchmark scripts
+├── .github/workflows/   # CI/CD pipeline (Testcontainers + Docker builds)
+└── compose.yaml         # Multi-container orchestration
 ```
 
 ---
 
-## 🚀 Quick Start (Docker Compose)
+## Quickstart
 
-Spin up the entire microservice ecosystem, databases, message broker, and tracing tools with a single command:
+### Prerequisites
+* Docker & Docker Compose
 
 ```bash
-# 1. Clone repository
+# Clone the repository
 git clone https://github.com/DmytroChup/url-shortener.git
 cd url-shortener
 
-# 2. Build and launch all services in detached mode
+# Start the entire ecosystem
 docker compose up --build -d
 ```
 
-### Services & Port Mappings:
-| Service               | Host Port    | Internal Port | Technology                   | Purpose                              |
-|-----------------------|--------------|---------------|------------------------------|--------------------------------------|
-| **API Gateway**       | `8080`       | `8080`        | Spring Cloud Gateway (Netty) | Public entry point & reverse proxy   |
-| **URL Service**       | `8081`       | `8081`        | Spring Boot 4 / Java 25      | URL shortening & 302 redirects       |
-| **Analytics Service** | `8082`       | `8082`        | Spring Boot 4 / Java 25      | Click analytics & Kafka consumer     |
-| **OpenZipkin UI**     | `9411`       | `9411`        | Zipkin                       | Distributed tracing dashboard        |
-| **PostgreSQL**        | `5444`       | `5432`        | PostgreSQL 16 Alpine         | Databases: `urls_db`, `analytics_db` |
-| **Apache Kafka**      | `9092, 9094` | `9092`        | Apache Kafka 4.3 (KRaft)     | Event streaming broker               |
-| **Redis**             | `6379`       | `6379`        | Redis 8.8 Alpine             | In-memory cache & rate limiter       |
+### Endpoints & Infrastructure
+
+| Service               | Port         | Description                            | Docs                                    |
+|-----------------------|--------------|----------------------------------------|-----------------------------------------|
+| **API Gateway**       | `8080`       | Public reverse proxy & rate limiter    | Root routing                            |
+| **URL Service**       | `8081`       | Core shortening & redirect service     | `http://localhost:8081/swagger-ui.html` |
+| **Analytics Service** | `8082`       | Clickstream consumer & reporting       | `http://localhost:8082/swagger-ui.html` |
+| **Zipkin UI**         | `9411`       | Distributed tracing dashboard          | `http://localhost:9411/zipkin/`         |
+| **PostgreSQL**        | `5444`       | Databases: `urls_db`, `analytics_db`   | Mapped to internal `5432`               |
+| **Apache Kafka**      | `9092, 9094` | KRaft broker (internal & external)     | Port `9092` internal                    |
+| **Redis**             | `6379`       | In-memory cache & rate limiter storage | Standalone                              |
 
 ---
 
-## 🧪 Live Smoke Test (cURL)
+## API Verification (cURL)
 
-Send requests directly to the **API Gateway** (`http://localhost:8080`):
+Requests should be sent directly to the **API Gateway** (`http://localhost:8080`):
 
 ### 1. Shorten a URL
 ```bash
@@ -105,27 +107,26 @@ curl -X POST http://localhost:8080/api/v1/urls/shorten \
   -H "Content-Type: application/json" \
   -d '{"url": "https://spring.io", "ttlDays": 30}'
 ```
-**Response:**
+Response:
 ```
 "aB7xK9q"
 ```
 
-### 2. Follow Short URL (HTTP 302 Redirect)
+### 2. Follow Redirect (HTTP 302)
 ```bash
 curl -i http://localhost:8080/aB7xK9q
 ```
-**Response:**
+Response:
 ```http
 HTTP/1.1 302 Found
 Location: https://spring.io
 ```
-*(Notice: The redirect executes immediately in < 10ms while the click event is written to Outbox and processed asynchronously in Kafka).*
 
-### 3. Retrieve Click Analytics
+### 3. Check Analytics
 ```bash
 curl http://localhost:8080/api/v1/analytics/aB7xK9q
 ```
-**Response:**
+Response:
 ```json
 {
   "shortCode": "aB7xK9q",
@@ -133,13 +134,13 @@ curl http://localhost:8080/api/v1/analytics/aB7xK9q
 }
 ```
 
-### 4. Verify Resilience4j Circuit Breaker Fallback
-Stop the Analytics Service container to test system resilience:
+### 4. Test Circuit Breaker Fallback
+Stop the analytics container to simulate a downstream outage:
 ```bash
 docker compose stop analytics-service
 curl -i http://localhost:8080/api/v1/analytics/aB7xK9q
 ```
-**Fallback Response (RFC 7807):**
+Fallback Response:
 ```http
 HTTP/1.1 503 Service Unavailable
 Content-Type: application/problem+json
@@ -152,28 +153,41 @@ Content-Type: application/problem+json
 }
 ```
 
-### 5. Inspect Traces in Zipkin
-Open `http://localhost:9411/zipkin/` in your browser and click **"Run Query"** to view end-to-end trace latency spanning the Gateway, URL Service, Outbox publisher, and Kafka consumer execution.
+---
+
+## Load Testing & Benchmarks
+
+The redirect engine was benchmarked using **Grafana k6** running inside the Docker network against the core service under a 50-second ramping profile with zero-redirect tracking:
+
+| Metric               | Result           | Notes                                                        |
+|----------------------|------------------|--------------------------------------------------------------|
+| **Throughput (RPS)** | **3,891+ req/s** | Peak sustained redirect rate                                 |
+| **Total Requests**   | **220,821**      | Total operations completed during test run                   |
+| **Success Rate**     | **100.00%**      | 220,811 / 220,811 successful HTTP 302 redirects (0 failures) |
+| **P50 Latency**      | **13.4 ms**      | Median response time                                         |
+| **P90 Latency**      | **22.2 ms**      | 90th percentile latency                                      |
+| **P95 Latency**      | **28.7 ms**      | 95th percentile latency                                      |
+| **P99 Latency**      | **40.8 ms**      | 99th percentile (includes PostgreSQL Outbox persistence)     |
+
+```powershell
+# Run the benchmark
+cat load-tests/redirect-benchmark.js | docker run --rm -i --network url-shortener_default -e TARGET_URL=http://url-service:8081 grafana/k6 run -
+```
 
 ---
 
-## 🛠 Testing & CI/CD Pipeline
+## Testing & CI/CD
 
-The project enforces strict automated testing discipline:
-* **Unit Tests:** Fast, isolated domain logic testing using JUnit 5 and Mockito.
-* **Integration Tests:** Comprehensive integration test suites using **Testcontainers** (real PostgreSQL, Redis, and Apache Kafka instances spun up in isolated Docker containers per test run).
-* **CI/CD Pipeline:** Fully automated via **GitHub Actions** (`.github/workflows/ci.yml`):
-  * Automated builds on **Java 25 (Eclipse Temurin)** with Gradle dependency caching.
-  * Multi-module integration test execution with Docker-in-Docker Testcontainers.
-  * Matrix-based parallel validation of all service **Dockerfiles**.
-  * Automatic JUnit test report artifacts upload on test failure.
+* **Unit Testing**: Business logic isolated with JUnit 5 and Mockito.
+* **Integration Testing**: Multi-module suites tested against real PostgreSQL, Redis, and Kafka containers via **Testcontainers**.
+* **CI Pipeline**: Automated build and verification on **GitHub Actions** (`.github/workflows/ci.yml`) using Java 25, Gradle build cache, and parallel Dockerfile verification.
 
 ```bash
-# Run the entire test suite locally across all modules
+# Run local test suite
 ./gradlew test
 ```
 
 ---
 
-## 📄 License
+## License
 This project is open-source and available under the [MIT License](LICENSE).
