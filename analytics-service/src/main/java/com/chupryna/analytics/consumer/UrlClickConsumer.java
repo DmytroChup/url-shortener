@@ -2,6 +2,8 @@ package com.chupryna.analytics.consumer;
 
 import com.chupryna.analytics.entity.UrlClick;
 import com.chupryna.analytics.repository.UrlClickRepository;
+import com.chupryna.analytics.service.GeoIpService;
+import com.chupryna.analytics.service.UserAgentParserService;
 import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,8 @@ public class UrlClickConsumer {
     private static final int MAX_USER_AGENT_LENGTH = 512;
 
     private final UrlClickRepository urlClickRepository;
+    private final GeoIpService geoIpService;
+    private final UserAgentParserService userAgentParserService;
 
     @KafkaListener(topics = KafkaTopics.URL_CLICKS, groupId = "analytics-group")
     public void consume(UrlClickEvent event) {
@@ -36,6 +40,9 @@ public class UrlClickConsumer {
             return;
         }
 
+        var uaMeta = userAgentParserService.parseUserAgent(event.userAgent());
+        String countryCode = geoIpService.resolveCountryCode(event.maskedIpAddress());
+
         UrlClick urlClick = UrlClick.builder()
                 .eventId(event.eventId())
                 .shortCode(event.shortCode())
@@ -43,6 +50,10 @@ public class UrlClickConsumer {
                 .maskedIpAddress(event.maskedIpAddress())
                 .clickedAt(event.clickedAt() != null ? event.clickedAt() : Instant.now())
                 .referer(truncate(event.referer(), MAX_REFERER_LENGTH))
+                .countryCode(countryCode)
+                .deviceType(uaMeta.deviceType().name())
+                .browser(uaMeta.browser())
+                .operatingSystem(uaMeta.operatingSystem())
                 .build();
 
         try {

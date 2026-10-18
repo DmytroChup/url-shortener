@@ -23,7 +23,7 @@ The platform is decomposed into three primary services:
 
 * **API Gateway (`:8080`)**: Built on Spring Cloud Gateway (Netty). Handles path routing, Redis Token Bucket rate limiting, and circuit breaking for downstream analytics requests.
 * **URL Service (`:8081`)**: Manages Base62 link generation, Redis cache-aside lookups, and transactional persistence of click events into an Outbox table.
-* **Analytics Service (`:8082`)**: Consumes click events from Kafka, guarantees idempotent processing via unique event identifiers, routes poison pills to a Dead Letter Topic, and stores click statistics.
+* **Analytics Service (`:8082`)**: Consumes click events from Kafka, guarantees idempotent processing via unique event identifiers, enriches clicks with GeoIP and User-Agent heuristics (device, OS, browser), routes poison pills to a Dead Letter Topic, and exposes Top-10 aggregated statistics.
 
 ---
 
@@ -130,7 +130,19 @@ Response:
 ```json
 {
   "shortCode": "aB7xK9q",
-  "clickCount": 1
+  "totalClicks": 1,
+  "topCountries": {
+    "US": 1
+  },
+  "devices": {
+    "DESKTOP": 1
+  },
+  "topBrowsers": {
+    "Chrome": 1
+  },
+  "topOperatingSystems": {
+    "Windows": 1
+  }
 }
 ```
 

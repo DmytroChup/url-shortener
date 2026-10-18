@@ -25,6 +25,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-zipkin")
 
+	implementation("com.maxmind.geoip2:geoip2:5.2.0")
+	implementation("nl.basjes.parse.useragent:yauaa:8.2.0")
+
 	compileOnly("org.projectlombok:lombok")
 	runtimeOnly("org.postgresql:postgresql")
 	annotationProcessor("org.projectlombok:lombok")

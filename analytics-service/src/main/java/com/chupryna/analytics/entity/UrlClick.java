@@ -36,4 +36,16 @@ public class UrlClick {
 
     @Column(columnDefinition = "TEXT")
     private String referer;
+
+    @Column(length = 10)
+    private String countryCode;
+
+    @Column(length = 20)
+    private String deviceType;
+
+    @Column(length = 50)
+    private String browser;
+
+    @Column(length = 50)
+    private String operatingSystem;
 }

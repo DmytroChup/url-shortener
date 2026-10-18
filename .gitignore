@@ -38,3 +38,6 @@ out/
 
 # Enviroment variables
 .env
+
+# MaxMind GeoIP binary database
+*.mmdb

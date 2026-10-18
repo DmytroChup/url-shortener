@@ -96,7 +96,7 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
             UrlClickEvent event = new UrlClickEvent(
                     UUID.randomUUID(),
                     shortCode,
-                    "Mozilla/5.0",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
                     "192.168.1.1",
                     Instant.now(),
                     "https://google.com"
@@ -112,7 +112,10 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
         mockMvc.perform(get("/api/v1/analytics/{shortCode}", shortCode))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortCode").value(shortCode))
-                .andExpect(jsonPath("$.totalClicks").value(3));
+                .andExpect(jsonPath("$.totalClicks").value(3))
+                .andExpect(jsonPath("$.topCountries.LOCAL").value(3))
+                .andExpect(jsonPath("$.devices.DESKTOP").value(3))
+                .andExpect(jsonPath("$.topBrowsers.Chrome").value(3));
     }
 
     @Test
