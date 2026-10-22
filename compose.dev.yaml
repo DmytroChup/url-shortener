@@ -1,0 +1,15 @@
+services:
+  api-gateway:
+    ports: ["127.0.0.1:8080:8080"]
+  url-service:
+    ports: ["127.0.0.1:8081:8081"]
+  analytics-service:
+    ports: ["127.0.0.1:8082:8082"]
+  postgres:
+    ports: ["127.0.0.1:5444:5432"]
+  redis:
+    ports: ["127.0.0.1:6379:6379"]
+  kafka:
+    ports: ["127.0.0.1:9094:9094"]
+  zipkin:
+    ports: ["127.0.0.1:9411:9411"]

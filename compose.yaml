@@ -3,8 +3,6 @@ services:
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
-    ports:
-      - "8080:8080"
     environment:
       - 'URL_SERVICE_URL=http://url-service:8081'
       - 'ANALYTICS_SERVICE_URL=http://analytics-service:8082'
@@ -21,8 +19,6 @@ services:
     build:
       context: .
       dockerfile: url-service/Dockerfile
-    ports:
-      - "8081:8081"
     environment:
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}'
       - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}'
@@ -41,8 +37,6 @@ services:
     build:
       context: .
       dockerfile: analytics-service/Dockerfile
-    ports:
-      - "8082:8082"
     environment:
       - 'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_ANALYTICS_DB}'
       - 'SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}'
@@ -61,23 +55,16 @@ services:
       - 'POSTGRES_DB=${POSTGRES_DB}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
       - 'POSTGRES_USER=${POSTGRES_USER}'
-    ports:
-      - '5444:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/init-analytics-db.sql:/docker-entrypoint-initdb.d/init-analytics-db.sql:ro
 
   redis:
     image: redis:8.8.3-alpine
-    ports:
-      - '6379:6379'
 
   kafka:
     image: apache/kafka:4.3.1
     container_name: kafka
-    ports:
-      - '9092:9092'
-      - '9094:9094'
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
@@ -96,8 +83,16 @@ services:
   zipkin:
     image: openzipkin/zipkin:3.6.1
     container_name: zipkin
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: url-shortener-frontend
     ports:
-      - "9411:9411"
+      - "80:80"
+    depends_on:
+      - api-gateway
 
 volumes:
   postgres-data:

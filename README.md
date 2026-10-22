@@ -4,14 +4,26 @@
 ![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-green?logo=springboot)
 ![Spring Cloud Gateway](https://img.shields.io/badge/Spring%20Cloud-Gateway-blue)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?logo=tailwind-css)
 ![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-4.3-red?logo=apachekafka)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?logo=postgresql)
 ![Redis](https://img.shields.io/badge/Redis-8.8-red?logo=redis)
+![Nginx](https://img.shields.io/badge/Nginx-Edge_Proxy-009639?logo=nginx)
 ![Docker](https://img.shields.io/badge/Docker%20Compose-Ready-blue?logo=docker)
 
-A distributed URL shortening and clickstream analytics service built with Spring Boot, Apache Kafka, Redis, and PostgreSQL. 
+A distributed URL shortening and clickstream analytics platform built with Spring Boot, Apache Kafka, Redis, PostgreSQL, and a modern React 19 SPA.
 
-The service separates the latency-critical redirect path from event processing using the **Transactional Outbox Pattern**, and incorporates **Resilience4j circuit breaking**, **idempotent consumption**, and **distributed tracing via OpenZipkin**.
+The service separates the latency-critical redirect path from event processing using the **Transactional Outbox Pattern**, and incorporates **Resilience4j circuit breaking**, **idempotent Kafka consumption**, and **distributed tracing via OpenZipkin**.
+
+---
+
+## Web Dashboard Preview
+
+![Web Interface Preview](assets/web-ui.png)
+
+*Developer-first SPA interface featuring dark OLED aesthetics, QR code generation, configurable TTL link retention, and real-time Kafka click telemetry charts.*
 
 ---
 
@@ -19,36 +31,40 @@ The service separates the latency-critical redirect path from event processing u
 
 ![System Architecture](assets/architecture.png)
 
-The platform is decomposed into three primary services:
+The platform is decomposed into four primary parts:
 
-* **API Gateway (`:8080`)**: Built on Spring Cloud Gateway (Netty). Handles path routing, Redis Token Bucket rate limiting, and circuit breaking for downstream analytics requests.
+* **Frontend & Edge Reverse Proxy (`:80`)**: Nginx reverse proxy serving the compiled React 19 SPA. Serves as the single unified public entry point, proxies API calls and short link redirects to the API Gateway, caches static assets, and strips client-spoofed `X-Forwarded-For` headers.
+* **API Gateway (`:8080`)**: Built on Spring Cloud Gateway (WebFlux / Netty). Manages path routing, Redis Token Bucket rate limiting, and circuit breaking for downstream analytics requests.
 * **URL Service (`:8081`)**: Manages Base62 link generation, Redis cache-aside lookups, and transactional persistence of click events into an Outbox table.
-* **Analytics Service (`:8082`)**: Consumes click events from Kafka, guarantees idempotent processing via unique event identifiers, enriches clicks with GeoIP and User-Agent heuristics (device, OS, browser), routes poison pills to a Dead Letter Topic, and exposes Top-10 aggregated statistics.
+* **Analytics Service (`:8082`)**: Consumes click events from Kafka, guarantees idempotent processing via unique event identifiers, enriches clicks with GeoIP and User-Agent heuristics (device, OS, browser), routes poison pills to a Dead Letter Topic, and exposes aggregated statistics.
 
 ---
 
 ## Distributed Systems & Resilience Patterns
 
-### 1. Transactional Outbox (Dual-Write Prevention)
-Writing to PostgreSQL and publishing to Kafka within separate calls introduces potential state divergence if the network fails midway.  
+### 1. Unified Edge Entrypoint & Anti-Spoofing
+All external traffic terminates at the Nginx edge proxy on port `80`. Nginx overrides incoming `X-Forwarded-For` headers with `$remote_addr` (socket IP), neutralizing client IP spoofing before requests reach the internal Spring Cloud Gateway and rate limiters.
+
+### 2. Transactional Outbox (Dual-Write Prevention)
+Writing to PostgreSQL and publishing to Kafka within separate calls introduces potential state divergence if the network fails midway.
 On every redirect, `UrlClickEvent` is stored inside the local `outbox_events` table within the same database transaction. An asynchronous worker polls unpublished events, pushes them to the `url-clicks` Kafka topic, and marks them processed upon broker acknowledgement.
 
-### 2. Idempotent Consumer
-Kafka provides at-least-once delivery semantics, meaning network retries or consumer group rebalances can cause duplicated event delivery.  
+### 3. Idempotent Consumer
+Kafka provides at-least-once delivery semantics, meaning network retries or consumer group rebalances can cause duplicated event delivery.
 The consumer tracks incoming `eventId` (UUID) values within a `processed_events` table. Duplicate events are acknowledged and discarded without updating click counts.
 
-### 3. Dead Letter Topic (DLT / Poison Pill Isolation)
-Unparseable payloads or unexpected deserialization errors can block partition offsets and halt consumer progress.  
+### 4. Dead Letter Topic (DLT / Poison Pill Isolation)
+Unparseable payloads or unexpected deserialization errors can block partition offsets and halt consumer progress.
 A custom `DefaultErrorHandler` with exponential backoff intercepts failing records and redirects unrecoverable events to `url-clicks.DLT`, allowing the main consumer loop to proceed uninterrupted.
 
-### 4. Circuit Breaker & Fallback
+### 5. Circuit Breaker & Fallback
 To prevent cascading service degradation, the API Gateway protects analytics routes with **Resilience4j**. If downstream failure rates exceed 50%, the gateway opens the circuit and immediately responds with an **RFC 7807 Problem Detail (503 Service Unavailable)** fallback without blocking worker threads.
 
-### 5. Cache Penetration Protection
-Direct database queries for non-existent short codes can exhaust database connections under high traffic or scanning attacks.  
+### 6. Cache Penetration Protection
+Direct database queries for non-existent short codes can exhaust database connections under high traffic or scanning attacks.
 When a short code is not found, a negative cache entry (`__NOT_FOUND__`) is written to Redis with a short 5-minute TTL, absorbing subsequent misses directly in memory.
 
-### 6. Distributed Tracing
+### 7. Distributed Tracing
 All HTTP requests, reactive Gateway filters, and asynchronous Kafka messages propagate W3C/B3 trace headers instrumented via **Micrometer Tracing** and **Brave**, with visualization in **OpenZipkin**.
 
 ---
@@ -57,6 +73,7 @@ All HTTP requests, reactive Gateway filters, and asynchronous Kafka messages pro
 
 ```
 url-shortener/
+├── frontend/            # React 19 SPA, Tailwind CSS v4, Lucide icons, Recharts
 ├── api-gateway/         # Reactive gateway, rate limiting, circuit breaker fallback
 ├── contracts/           # Shared domain events (UrlClickEvent) and DTOs
 ├── url-service/         # Base62 shortening, Redis cache-aside, Outbox publisher
@@ -64,7 +81,8 @@ url-shortener/
 ├── docker/              # Multi-database init scripts
 ├── load-tests/          # k6 load testing benchmark scripts
 ├── .github/workflows/   # CI/CD pipeline (Testcontainers + Docker builds)
-└── compose.yaml         # Multi-container orchestration
+├── compose.yaml         # Production perimeter (port 80 only)
+└── compose.dev.yaml     # Local dev overlay (loopback ports for DBs, Swagger, Zipkin)
 ```
 
 ---
@@ -74,36 +92,41 @@ url-shortener/
 ### Prerequisites
 * Docker & Docker Compose
 
+### 1. Production Mode (Hardened Perimeter)
+Only Nginx (port `80`) is exposed. All backend services and databases remain private inside the Docker network:
 ```bash
-# Clone the repository
-git clone https://github.com/DmytroChup/url-shortener.git
-cd url-shortener
-
-# Start the entire ecosystem
 docker compose up --build -d
+```
+Access the application at `http://localhost`.
+
+### 2. Development Mode (With Debugging Ports)
+Uses `compose.dev.yaml` to bind debugging ports strictly to `127.0.0.1` (loopback):
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up --build -d
 ```
 
 ### Endpoints & Infrastructure
 
-| Service               | Port         | Description                            | Docs                                    |
-|-----------------------|--------------|----------------------------------------|-----------------------------------------|
-| **API Gateway**       | `8080`       | Public reverse proxy & rate limiter    | Root routing                            |
-| **URL Service**       | `8081`       | Core shortening & redirect service     | `http://localhost:8081/swagger-ui.html` |
-| **Analytics Service** | `8082`       | Clickstream consumer & reporting       | `http://localhost:8082/swagger-ui.html` |
-| **Zipkin UI**         | `9411`       | Distributed tracing dashboard          | `http://localhost:9411/zipkin/`         |
-| **PostgreSQL**        | `5444`       | Databases: `urls_db`, `analytics_db`   | Mapped to internal `5432`               |
-| **Apache Kafka**      | `9092, 9094` | KRaft broker (internal & external)     | Port `9092` internal                    |
-| **Redis**             | `6379`       | In-memory cache & rate limiter storage | Standalone                              |
+| Service               | Public Port (Prod) | Dev Port (Loopback) | Description                             | Docs / UI                               |
+|-----------------------|--------------------|---------------------|-----------------------------------------|-----------------------------------------|
+| **Frontend & Edge**   | `80`               | `80`                | React SPA & Nginx Edge Reverse Proxy    | `http://localhost/`                     |
+| **API Gateway**       | *Internal*         | `127.0.0.1:8080`    | Internal Gateway & Token Bucket Limiter | Root routing                            |
+| **URL Service**       | *Internal*         | `127.0.0.1:8081`    | Base62 shortening & Outbox publisher    | `http://localhost:8081/swagger-ui.html` |
+| **Analytics Service** | *Internal*         | `127.0.0.1:8082`    | Clickstream consumer & reporting        | `http://localhost:8082/swagger-ui.html` |
+| **Zipkin UI**         | *Internal*         | `127.0.0.1:9411`    | Distributed tracing dashboard           | `http://localhost:9411/zipkin/`         |
+| **PostgreSQL**        | *Internal*         | `127.0.0.1:5444`    | Databases: `urls_db`, `analytics_db`    | Mapped to internal `5432`               |
+| **Apache Kafka**      | *Internal*         | `127.0.0.1:9094`    | KRaft single-node broker                | Port `9092` internal                    |
+| **Redis**             | *Internal*         | `127.0.0.1:6379`    | Cache-aside & rate limiter storage      | Standalone                              |
 
 ---
 
 ## API Verification (cURL)
 
-Requests should be sent directly to the **API Gateway** (`http://localhost:8080`):
+Requests should be sent directly to the single entry point (`http://localhost`):
 
 ### 1. Shorten a URL
 ```bash
-curl -X POST http://localhost:8080/api/v1/urls/shorten \
+curl -X POST http://localhost/api/v1/urls/shorten \
   -H "Content-Type: application/json" \
   -d '{"url": "https://spring.io", "ttlDays": 30}'
 ```
@@ -114,7 +137,7 @@ Response:
 
 ### 2. Follow Redirect (HTTP 302)
 ```bash
-curl -i http://localhost:8080/aB7xK9q
+curl -i http://localhost/aB7xK9q
 ```
 Response:
 ```http
@@ -124,7 +147,7 @@ Location: https://spring.io
 
 ### 3. Check Analytics
 ```bash
-curl http://localhost:8080/api/v1/analytics/aB7xK9q
+curl http://localhost/api/v1/analytics/aB7xK9q
 ```
 Response:
 ```json
@@ -143,25 +166,6 @@ Response:
   "topOperatingSystems": {
     "Windows": 1
   }
-}
-```
-
-### 4. Test Circuit Breaker Fallback
-Stop the analytics container to simulate a downstream outage:
-```bash
-docker compose stop analytics-service
-curl -i http://localhost:8080/api/v1/analytics/aB7xK9q
-```
-Fallback Response:
-```http
-HTTP/1.1 503 Service Unavailable
-Content-Type: application/problem+json
-
-{
-  "type": "urn:problem-type:service-unavailable",
-  "title": "Service Unavailable",
-  "status": 503,
-  "detail": "Analytics service is temporarily unavailable. Please try again later."
 }
 ```
 

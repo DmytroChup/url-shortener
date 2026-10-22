@@ -7,13 +7,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import reactor.core.publisher.Mono;
 
+import java.net.InetSocketAddress;
+
 @Configuration
 public class GatewayConfig {
 
     @Bean
     public KeyResolver ipKeyResolver() {
         return exchange -> Mono.justOrEmpty(exchange.getRequest().getRemoteAddress())
-                .map(r -> r.getAddress().getHostAddress())
+                .map(InetSocketAddress::getHostString)
                 .defaultIfEmpty("anonymous");
     }
 
