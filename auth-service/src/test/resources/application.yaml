@@ -1,0 +1,5 @@
+app:
+  jwt:
+    secret: "58fd7fc9a69d5a74d1b12c6bdc477b12a858f4392c2149f1b28f33346dd7aaa0"
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d

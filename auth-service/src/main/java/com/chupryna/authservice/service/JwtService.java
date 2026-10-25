@@ -24,7 +24,7 @@ public class JwtService {
         this.secretKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
-    private Claims extractAllClaims(String token) {
+    public Claims extractAllClaims(String token) {
         var parser = Jwts.parser()
             .verifyWith(secretKey);
 

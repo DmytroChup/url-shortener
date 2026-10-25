@@ -1,4 +1,4 @@
-package com.chupryna.authservice;
+package com.chupryna.authservice.controller;
 
 import com.chupryna.authservice.dto.AuthResponse;
 import com.chupryna.authservice.dto.LoginRequest;
