@@ -22,6 +22,7 @@ public record JwtProperties(
     @NotNull
     Duration refreshTokenTtl,
 
+    @NotBlank(message = "JWT issuer must not be blank")
     String issuer
 ) {
 }

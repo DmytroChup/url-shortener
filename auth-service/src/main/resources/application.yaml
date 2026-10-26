@@ -24,6 +24,7 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET}
+    issuer: url-shortener-auth
     access-token-ttl: 15m
     refresh-token-ttl: 7d
 
