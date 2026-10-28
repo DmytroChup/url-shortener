@@ -1,6 +1,7 @@
 package com.chupryna.url_shortener.controller;
 
 import com.chupryna.url_shortener.dto.UrlRequest;
+import com.chupryna.url_shortener.dto.UrlResponse;
 import com.chupryna.url_shortener.event.UrlClickEvent;
 import com.chupryna.url_shortener.service.OutboxService;
 import com.chupryna.url_shortener.service.UrlService;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @RestController()
@@ -43,8 +45,11 @@ public class UrlController {
             @ApiResponse(responseCode = "200", description = "URL shortened successfully, returns short code"),
             @ApiResponse(responseCode = "400", description = "Validation error or invalid request payload")
     })
-    public ResponseEntity<String> shortenUrl(@RequestBody @Valid UrlRequest urlRequest) {
-        String shortCode = urlService.shortenUrl(urlRequest.url(), urlRequest.ttlDays());
+    public ResponseEntity<String> shortenUrl(
+        @RequestBody @Valid UrlRequest urlRequest,
+        @RequestHeader(value = "X-User-Id", required = false) Long userId
+    ) {
+        String shortCode = urlService.shortenUrl(urlRequest.url(), urlRequest.ttlDays(), userId);
         return ResponseEntity.ok(shortCode);
     }
 
@@ -87,10 +92,25 @@ public class UrlController {
         );
 
         outboxService.saveEvent("URL", shortCode, "URL_CLICK", urlClickEvent);
-        
+
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(target)
                 .build();
+    }
+
+    @GetMapping("/me")
+    @Operation(
+        summary = "Get user's shortened URLs",
+        description = "Retrieves all shortened URLs created by the authenticated user, ordered by creation date descending."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "User's URLs retrieved successfully"),
+        @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    })
+    public ResponseEntity<List<UrlResponse>> getMyUrls(
+        @RequestHeader("X-User-Id") Long userId
+    ) {
+        return ResponseEntity.ok(urlService.getUserUrls(userId));
     }
 
     private String extractClientIp(HttpServletRequest request) {

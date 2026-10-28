@@ -152,4 +152,78 @@ public class UrlShortenerApplicationTests extends BaseIntegrationTest {
                                 .andExpect(status().isGone())
                 );
     }
+
+    @Test
+    @DisplayName("Should persist userId in database when X-User-Id header is present on shorten")
+    void shorten_WithUserIdHeader_PersistsUserIdInDatabase() throws Exception {
+        UrlRequest request = new UrlRequest("https://example.com/user-link");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/urls/shorten")
+                .header("X-User-Id", 42L)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        String shortCode = result.getResponse().getContentAsString();
+        Url savedUrl = urlRepository.findByShortCode(shortCode).orElseThrow();
+
+        assertThat(savedUrl.getUserId()).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("Should persist null userId in database when X-User-Id header is missing (guest flow)")
+    void shorten_WithoutUserIdHeader_PersistsNullUserId() throws Exception {
+        UrlRequest request = new UrlRequest("https://example.com/guest-link");
+
+        MvcResult result = mockMvc.perform(post("/api/v1/urls/shorten")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        String shortCode = result.getResponse().getContentAsString();
+        Url savedUrl = urlRepository.findByShortCode(shortCode).orElseThrow();
+
+        assertThat(savedUrl.getUserId()).isNull();
+    }
+
+    @Test
+    @DisplayName("Should return only URLs belonging to the authenticated user ordered by createdAt desc")
+    void getMyUrls_WithUserIdHeader_ReturnsUserUrlsOrdered() throws Exception {
+        Url userUrl1 = new Url();
+        userUrl1.setShortCode("user101");
+        userUrl1.setOriginalUrl("https://example.com/first");
+        userUrl1.setUserId(100L);
+        userUrl1.setExpiresAt(Instant.now().plus(Duration.ofDays(30)));
+        urlRepository.save(userUrl1);
+
+        Url userUrl2 = new Url();
+        userUrl2.setShortCode("user102");
+        userUrl2.setOriginalUrl("https://example.com/second");
+        userUrl2.setUserId(100L);
+        userUrl2.setExpiresAt(Instant.now().plus(Duration.ofDays(30)));
+        urlRepository.save(userUrl2);
+
+        Url otherUserUrl = new Url();
+        otherUserUrl.setShortCode("other01");
+        otherUserUrl.setOriginalUrl("https://example.com/other");
+        otherUserUrl.setUserId(200L);
+        otherUserUrl.setExpiresAt(Instant.now().plus(Duration.ofDays(30)));
+        urlRepository.save(otherUserUrl);
+
+        mockMvc.perform(get("/api/v1/urls/me")
+                .header("X-User-Id", 100L))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].shortCode").value("user102"))
+            .andExpect(jsonPath("$[1].shortCode").value("user101"));
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request when X-User-Id header is missing on /me endpoint")
+    void getMyUrls_WithoutUserIdHeader_ReturnsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/urls/me"))
+            .andExpect(status().isBadRequest());
+    }
 }

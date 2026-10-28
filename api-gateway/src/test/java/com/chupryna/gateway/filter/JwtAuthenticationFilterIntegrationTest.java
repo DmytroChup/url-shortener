@@ -19,7 +19,7 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
     @DisplayName("Should return 401 Unauthorized when requesting protected path without token")
     void protectedPath_NoToken_Returns401() {
         webTestClient.get()
-            .uri("/api/v1/urls/my")
+            .uri("/api/v1/urls/me")
             .exchange()
             .expectStatus().isUnauthorized();
     }
@@ -30,7 +30,7 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
         String expiredToken = TestJwt.token(jwtProperties.secret(), 42L, "ROLE_USER", Duration.ofMinutes(-1));
 
         webTestClient.get()
-            .uri("/api/v1/urls/my")
+            .uri("/api/v1/urls/me")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredToken)
             .exchange()
             .expectStatus().isUnauthorized();
@@ -42,7 +42,7 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
         String forgedToken = TestJwt.token(FOREIGN_SECRET, 42L, "ROLE_USER", Duration.ofMinutes(5));
 
         webTestClient.get()
-            .uri("/api/v1/urls/my")
+            .uri("/api/v1/urls/me")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + forgedToken)
             .exchange()
             .expectStatus().isUnauthorized();
@@ -51,18 +51,18 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Should forward validated X-User-Id and X-User-Role headers when valid JWT is provided")
     void protectedPath_ValidToken_ForwardsUserHeaders() {
-        wireMockServer.stubFor(get(urlPathEqualTo("/api/v1/urls/my"))
+        wireMockServer.stubFor(get(urlPathEqualTo("/api/v1/urls/me"))
             .willReturn(okJson("[]")));
 
         String validToken = TestJwt.token(jwtProperties.secret(), 42L, "ROLE_USER", Duration.ofMinutes(5));
 
         webTestClient.get()
-            .uri("/api/v1/urls/my")
+            .uri("/api/v1/urls/me")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken)
             .exchange()
             .expectStatus().isOk();
 
-        wireMockServer.verify(getRequestedFor(urlPathEqualTo("/api/v1/urls/my"))
+        wireMockServer.verify(getRequestedFor(urlPathEqualTo("/api/v1/urls/me"))
             .withHeader("X-User-Id", equalTo("42"))
             .withHeader("X-User-Role", equalTo("ROLE_USER")));
     }

@@ -33,4 +33,7 @@ public class Url {
 
     @Column
     private Instant expiresAt;
+
+    @Column
+    private Long userId;
 }
