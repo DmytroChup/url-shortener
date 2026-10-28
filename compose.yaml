@@ -78,7 +78,7 @@ services:
       - 'POSTGRES_USER=${POSTGRES_USER}'
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/init-analytics-db.sql:/docker-entrypoint-initdb.d/init-analytics-db.sql:ro
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
 
   redis:
     image: redis:8.8.3-alpine
