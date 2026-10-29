@@ -24,6 +24,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-kafka")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-zipkin")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("com.github.ben-manes.caffeine:caffeine:3.3.1")
 
 	implementation("com.maxmind.geoip2:geoip2:5.2.0")
 	implementation("nl.basjes.parse.useragent:yauaa:8.2.0")
@@ -42,6 +44,7 @@ dependencies {
 	testImplementation("org.testcontainers:testcontainers-kafka")
 	testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
 	testImplementation("org.awaitility:awaitility:4.3.0")
+    testImplementation("org.wiremock:wiremock-standalone:3.13.2")
 
 	testCompileOnly("org.projectlombok:lombok")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")

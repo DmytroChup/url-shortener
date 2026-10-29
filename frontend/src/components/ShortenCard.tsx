@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api, ApiError } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import type { ShortenedHistoryItem } from '../types';
 
 interface ShortenCardProps {
@@ -40,6 +41,7 @@ export const ShortenCard: React.FC<ShortenCardProps> = ({
   onAddHistory,
   onClearHistory,
 }) => {
+  const { user, isAuthenticated } = useAuth();
   const [url, setUrl] = useState('');
   const [ttlDays, setTtlDays] = useState<number>(30);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -157,6 +159,15 @@ export const ShortenCard: React.FC<ShortenCardProps> = ({
       {/* Main Input Form Card */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-xl transition-all">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isAuthenticated && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-xl">
+              <Check className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                Signed in as <strong className="text-white font-medium">{user?.email || `User #${user?.id}`}</strong>. Links created will be linked to your account.
+              </span>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label htmlFor="url-input" className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
               Destination URL

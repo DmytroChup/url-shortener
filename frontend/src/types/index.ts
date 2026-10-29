@@ -3,6 +3,14 @@ export interface UrlRequest {
   ttlDays?: number;
 }
 
+export interface UrlResponse {
+  id: number;
+  originalUrl: string;
+  shortCode: string;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
 export interface UrlAnalyticsResponse {
   shortCode: string;
   totalClicks: number;
@@ -28,4 +36,17 @@ export interface ShortenedHistoryItem {
   shortUrl: string;
   createdAt: string;
   ttlDays?: number;
+}
+
+export interface User {
+  id: number;
+  role: string;
+  email?: string;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
 }

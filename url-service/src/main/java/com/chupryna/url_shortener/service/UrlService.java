@@ -1,6 +1,7 @@
 package com.chupryna.url_shortener.service;
 
 import com.chupryna.url_shortener.config.properties.UrlProperties;
+import com.chupryna.url_shortener.dto.UrlResponse;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.exception.LinkExpiredException;
 import com.chupryna.url_shortener.repository.UrlRepository;
@@ -11,11 +12,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -37,16 +40,20 @@ public class UrlService {
     private final StringRedisTemplate redisTemplate;
     private final UrlPersister urlPersister;
 
-    public String shortenUrl(String originalUrl, Integer ttlDays) {
+    public String shortenUrl(String originalUrl, Integer ttlDays, Long userId) {
         String normalizedUrl = normalizeUrl(originalUrl);
         validateUrl(normalizedUrl);
 
-        Url savedUrl = saveWithRetryOnCollision(normalizedUrl, ttlDays);
+        Url savedUrl = saveWithRetryOnCollision(normalizedUrl, ttlDays, userId);
 
         Duration ttl = calculateCacheTtl(savedUrl.getExpiresAt());
         redisTemplate.opsForValue().set(CACHE_PREFIX + savedUrl.getShortCode(), normalizedUrl, ttl);
 
         return savedUrl.getShortCode();
+    }
+
+    public String shortenUrl(String originalUrl, Integer ttlDays) {
+        return shortenUrl(originalUrl, ttlDays, null);
     }
 
     public String shortenUrl(String originalUrl) {
@@ -87,19 +94,48 @@ public class UrlService {
         return originalUrl;
     }
 
+    @Transactional(readOnly = true)
+    public List<UrlResponse> getUserUrls(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID cannot be null");
+        }
+        return urlRepository.findByUserIdOrderByCreatedAtDesc(userId)
+            .stream()
+            .map(url -> new UrlResponse(
+                url.getId(),
+                url.getOriginalUrl(),
+                url.getShortCode(),
+                url.getCreatedAt(),
+                url.getExpiresAt()
+            ))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean checkAccess(String shortCode, Long userId) {
+        if (userId == null || shortCode == null || !SHORT_CODE_PATTERN.matcher(shortCode).matches()) {
+            return false;
+        }
+
+        return urlRepository.findByShortCode(shortCode)
+            .map(url -> url.getUserId() != null && url.getUserId().equals(userId))
+            .orElse(false);
+    }
+
     private void validateShortCode(String shortCode) {
         if (shortCode == null || !SHORT_CODE_PATTERN.matcher(shortCode).matches()) {
             throw new IllegalArgumentException("Invalid short code format");
         }
     }
 
-    private Url saveWithRetryOnCollision(String normalizedUrl, Integer ttlDays) {
+    private Url saveWithRetryOnCollision(String normalizedUrl, Integer ttlDays, Long userId) {
         for (int attempt = 0; attempt < urlProperties.maxSaveRetries(); attempt++) {
             String candidateCode = codeGenerator.generate();
 
             Url url = new Url();
             url.setShortCode(candidateCode);
             url.setOriginalUrl(normalizedUrl);
+            url.setUserId(userId);
             url.setExpiresAt(ttlDays == null ?
                     Instant.now().plus(Duration.ofDays(urlProperties.defaultTtlDays())) :
                     Instant.now().plus(Duration.ofDays(ttlDays)));

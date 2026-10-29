@@ -24,4 +24,6 @@ public interface UrlRepository extends JpaRepository<Url, Long> {
 
     @Query("SELECT u.shortCode FROM Url u WHERE u.expiresAt < :cutoff")
     List<String> findShortCodesExpiredBefore(@Param("cutoff") Instant cutoff);
+
+    List<Url> findByUserIdOrderByCreatedAtDesc(Long userId);
 }

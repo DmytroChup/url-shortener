@@ -1,1 +1,0 @@
-CREATE DATABASE url_shortener_analytics;

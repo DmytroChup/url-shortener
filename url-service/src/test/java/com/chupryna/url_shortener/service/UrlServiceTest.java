@@ -1,6 +1,7 @@
 package com.chupryna.url_shortener.service;
 
 import com.chupryna.url_shortener.config.properties.UrlProperties;
+import com.chupryna.url_shortener.dto.UrlResponse;
 import com.chupryna.url_shortener.entity.Url;
 import com.chupryna.url_shortener.exception.LinkExpiredException;
 import com.chupryna.url_shortener.repository.UrlRepository;
@@ -22,6 +23,7 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static com.chupryna.url_shortener.service.UrlService.*;
@@ -317,6 +319,142 @@ public class UrlServiceTest {
 
         assertThrows(LinkExpiredException.class, () -> urlService.getOriginalUrl(shortCode));
 
+        verify(urlRepository, never()).findByShortCode(any());
+    }
+
+    @Test
+    @DisplayName("Should persist userId when shortening URL for authenticated user")
+    void shortenUrl_WithUserId_PersistsUserId() {
+        Long userId = 42L;
+        String originalUrl = "https://example.com";
+        when(codeGenerator.generate()).thenReturn("aB7xK9q");
+        when(urlPersister.persist(any(Url.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        urlService.shortenUrl(originalUrl, 30, userId);
+
+        ArgumentCaptor<Url> captor = ArgumentCaptor.forClass(Url.class);
+        verify(urlPersister).persist(captor.capture());
+        assertEquals(userId, captor.getValue().getUserId());
+    }
+
+    @Test
+    @DisplayName("Should return mapped UrlResponse list ordered by creation date for valid userId")
+    void getUserUrls_ValidUserId_ReturnsOrderedUrlResponseList() {
+        Long userId = 42L;
+        Url url1 = new Url(1L,
+            "https://google.com",
+            "code001",
+            Instant.now(),
+            Instant.now().plus(Duration.ofDays(30)),
+            userId
+        );
+        Url url2 = new Url(2L,
+            "https://github.com",
+            "code002",
+            Instant.now().minus(Duration.ofDays(1)),
+            Instant.now().plus(Duration.ofDays(29)),
+            userId
+        );
+
+        when(urlRepository.findByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(url1, url2));
+
+        List<UrlResponse> responses = urlService.getUserUrls(userId);
+
+        assertEquals(2, responses.size());
+        assertEquals("code001", responses.get(0).shortCode());
+        assertEquals("https://google.com", responses.get(0).originalUrl());
+        assertEquals("code002", responses.get(1).shortCode());
+        assertEquals("https://github.com", responses.get(1).originalUrl());
+        verify(urlRepository).findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalArgumentException when userId is null")
+    void getUserUrls_NullUserId_ThrowsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> urlService.getUserUrls(null));
+        verify(urlRepository, never()).findByUserIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("Should return true when shortCode exists and userId matches owner")
+    void checkAccess_MatchingUserId_ReturnsTrue() {
+        String shortCode = "aB7xK9q";
+        Long userId = 52L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, userId);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertTrue(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when shortCode exists but userId belongs to someone else")
+    void checkAccess_DifferentUserId_ReturnsFalse() {
+        String shortCode = "aB7xK9q";
+        Long ownerId = 52L;
+        Long otherUserId = 99L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, ownerId);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, otherUserId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when URL was created anonymously without owner")
+    void checkAccess_AnonymousUrlWithoutUserId_ReturnsFalse() {
+        String shortCode = "aB7xK9q";
+        Long userId = 52L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, null);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when shortCode does not exist")
+    void checkAccess_UrlNotFound_ReturnsFalse() {
+        String shortCode = "unknown";
+        Long userId = 52L;
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.empty());
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        ", 52",             // shortCode is null
+        "'bad', 52",        // shortCode too short (< 7)
+        "'toolongcode', 52" // shortCode too long (> 7)
+    })
+    @DisplayName("Should return false without hitting repository when shortCode is invalid")
+    void checkAccess_InvalidShortCode_ReturnsFalse(String shortCode, Long userId) {
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository, never()).findByShortCode(any());
+    }
+
+    @Test
+    @DisplayName("Should return false without hitting repository when userId is null")
+    void checkAccess_NullUserId_ReturnsFalse() {
+        boolean allowed = urlService.checkAccess("aB7xK9q", null);
+
+        assertFalse(allowed);
         verify(urlRepository, never()).findByShortCode(any());
     }
 }

@@ -111,14 +111,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Search Header */}
       <div className="text-center space-y-3 pt-6 sm:pt-10">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
-          <Activity className="w-3.5 h-3.5 text-teal-400" />
-          <span>Real-Time Async Kafka Stream Consumer</span>
+          <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Real-Time Click Tracking</span>
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
-          Click <span className="bg-linear-to-r from-teal-400 to-emerald-300 bg-clip-text text-transparent">Telemetry & Insights</span>
+          Link <span className="bg-linear-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Analytics & Insights</span>
         </h1>
         <p className="text-slate-400 max-w-xl mx-auto text-sm sm:text-base">
-          Analyze visitor distribution, client platforms, user agents, and geographic demographics.
+          Track link performance, visitor demographics, devices, and browser distribution in real time.
         </p>
       </div>
 

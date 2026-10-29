@@ -17,13 +17,18 @@ spring:
             - id: url-service-shorten
               uri: ${URL_SERVICE_URL:http://localhost:8081}
               predicates:
-                - Path=/api/v1/urls/**
+                - Path=/api/v1/urls/shorten, /api/v1/urls/shorten/
                 - Method=POST
               filters:
                 - name: RequestRateLimiter
                   args:
                     rate-limiter: "#{@writeRateLimiter}"
                     key-resolver: "#{@ipKeyResolver}"
+
+            - id: url-service-api
+              uri: ${URL_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/urls/**
 
             - id: url-service-redirect
               uri: ${URL_SERVICE_URL:http://localhost:8081}
@@ -51,7 +56,21 @@ spring:
                       - 503
                       - 504
 
+            - id: auth-service
+              uri: ${AUTH_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/v1/auth/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    rate-limiter: "#{@writeRateLimiter}"
+                    key-resolver: "#{@ipKeyResolver}"
+
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
   tracing:
     sampling:
       probability: 1.0
@@ -75,3 +94,7 @@ resilience4j:
     configs:
       default:
         timeout-duration: 3s
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
