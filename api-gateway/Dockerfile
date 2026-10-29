@@ -6,6 +6,7 @@ COPY gradle gradle
 COPY build.gradle.kts .
 COPY settings.gradle.kts .
 
+COPY contracts contracts
 COPY api-gateway api-gateway
 
 RUN chmod +x gradlew
