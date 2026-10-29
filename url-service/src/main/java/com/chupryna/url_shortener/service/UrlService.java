@@ -111,6 +111,17 @@ public class UrlService {
             .toList();
     }
 
+    @Transactional(readOnly = true)
+    public boolean checkAccess(String shortCode, Long userId) {
+        if (userId == null || shortCode == null || !SHORT_CODE_PATTERN.matcher(shortCode).matches()) {
+            return false;
+        }
+
+        return urlRepository.findByShortCode(shortCode)
+            .map(url -> url.getUserId() != null && url.getUserId().equals(userId))
+            .orElse(false);
+    }
+
     private void validateShortCode(String shortCode) {
         if (shortCode == null || !SHORT_CODE_PATTERN.matcher(shortCode).matches()) {
             throw new IllegalArgumentException("Invalid short code format");

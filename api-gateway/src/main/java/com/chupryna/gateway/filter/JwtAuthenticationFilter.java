@@ -1,6 +1,7 @@
 package com.chupryna.gateway.filter;
 
 import com.chupryna.gateway.util.JwtValidator;
+import com.chupryna.url_shortener.security.SecurityHeaders;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
@@ -56,8 +57,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         ServerHttpRequest.Builder requestBuilder = request.mutate()
                 .headers(headers -> {
-                    headers.remove("X-User-Id");
-                    headers.remove("X-User-Role");
+                    headers.remove(SecurityHeaders.X_USER_ID);
+                    headers.remove(SecurityHeaders.X_USER_ROLE);
                 });
         boolean strictlyPublic = isStrictlyPublicPath(path, method);
         boolean guestAllowed = isGuestShortenAllowed(path, method);
@@ -67,11 +68,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             String token = authHeader.substring(7).trim();
             try {
                 Claims claims = jwtValidator.validateAndExtractClaims(token);
-                requestBuilder.header("X-User-Id", claims.getSubject());
+                requestBuilder.header(SecurityHeaders.X_USER_ID, claims.getSubject());
                 String role = claims.get("role", String.class);
 
                 if (role != null) {
-                    requestBuilder.header("X-User-Role", role);
+                    requestBuilder.header(SecurityHeaders.X_USER_ROLE, role);
                 }
             } catch (JwtException | IllegalArgumentException ex) {
                 log.debug("JWT validation failed for path {}: {}", path.value(), ex.getMessage());

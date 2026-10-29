@@ -3,6 +3,7 @@ package com.chupryna.analytics;
 import com.chupryna.analytics.repository.UrlClickRepository;
 import com.chupryna.url_shortener.event.KafkaTopics;
 import com.chupryna.url_shortener.event.UrlClickEvent;
+import com.chupryna.url_shortener.security.SecurityHeaders;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -109,7 +110,9 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
             assertThat(count).isEqualTo(3);
         });
 
-        mockMvc.perform(get("/api/v1/analytics/{shortCode}", shortCode))
+        mockMvc.perform(get("/api/v1/analytics/{shortCode}", shortCode)
+                    .header(SecurityHeaders.X_USER_ID, 1L)
+                    .header(SecurityHeaders.X_USER_ROLE, SecurityHeaders.ROLE_ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortCode").value(shortCode))
                 .andExpect(jsonPath("$.totalClicks").value(3))
@@ -141,7 +144,9 @@ class AnalyticsApplicationTests extends BaseIntegrationTest {
             assertThat(count).isEqualTo(1);
         });
 
-        mockMvc.perform(get("/api/v1/analytics/{shortCode}", shortCode))
+        mockMvc.perform(get("/api/v1/analytics/{shortCode}", shortCode)
+                    .header(SecurityHeaders.X_USER_ID, 1L)
+                    .header(SecurityHeaders.X_USER_ROLE, SecurityHeaders.ROLE_ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortCode").value(shortCode))
                 .andExpect(jsonPath("$.totalClicks").value(1));

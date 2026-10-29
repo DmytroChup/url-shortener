@@ -374,4 +374,87 @@ public class UrlServiceTest {
         assertThrows(IllegalArgumentException.class, () -> urlService.getUserUrls(null));
         verify(urlRepository, never()).findByUserIdOrderByCreatedAtDesc(any());
     }
+
+    @Test
+    @DisplayName("Should return true when shortCode exists and userId matches owner")
+    void checkAccess_MatchingUserId_ReturnsTrue() {
+        String shortCode = "aB7xK9q";
+        Long userId = 52L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, userId);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertTrue(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when shortCode exists but userId belongs to someone else")
+    void checkAccess_DifferentUserId_ReturnsFalse() {
+        String shortCode = "aB7xK9q";
+        Long ownerId = 52L;
+        Long otherUserId = 99L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, ownerId);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, otherUserId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when URL was created anonymously without owner")
+    void checkAccess_AnonymousUrlWithoutUserId_ReturnsFalse() {
+        String shortCode = "aB7xK9q";
+        Long userId = 52L;
+        Url url = new Url(1L, "https://example.com", shortCode, Instant.now(), null, null);
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.of(url));
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @Test
+    @DisplayName("Should return false when shortCode does not exist")
+    void checkAccess_UrlNotFound_ReturnsFalse() {
+        String shortCode = "unknown";
+        Long userId = 52L;
+
+        when(urlRepository.findByShortCode(shortCode)).thenReturn(Optional.empty());
+
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository).findByShortCode(shortCode);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        ", 52",             // shortCode is null
+        "'bad', 52",        // shortCode too short (< 7)
+        "'toolongcode', 52" // shortCode too long (> 7)
+    })
+    @DisplayName("Should return false without hitting repository when shortCode is invalid")
+    void checkAccess_InvalidShortCode_ReturnsFalse(String shortCode, Long userId) {
+        boolean allowed = urlService.checkAccess(shortCode, userId);
+
+        assertFalse(allowed);
+        verify(urlRepository, never()).findByShortCode(any());
+    }
+
+    @Test
+    @DisplayName("Should return false without hitting repository when userId is null")
+    void checkAccess_NullUserId_ReturnsFalse() {
+        boolean allowed = urlService.checkAccess("aB7xK9q", null);
+
+        assertFalse(allowed);
+        verify(urlRepository, never()).findByShortCode(any());
+    }
 }

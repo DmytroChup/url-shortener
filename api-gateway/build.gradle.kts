@@ -13,6 +13,8 @@ java {
 extra["springCloudVersion"] = "2025.1.3"
 
 dependencies {
+    implementation(project(":contracts"))
+
 	implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux")
 	implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")

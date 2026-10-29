@@ -3,6 +3,7 @@ package com.chupryna.url_shortener.controller;
 import com.chupryna.url_shortener.dto.UrlRequest;
 import com.chupryna.url_shortener.dto.UrlResponse;
 import com.chupryna.url_shortener.event.UrlClickEvent;
+import com.chupryna.url_shortener.security.SecurityHeaders;
 import com.chupryna.url_shortener.service.OutboxService;
 import com.chupryna.url_shortener.service.UrlService;
 import com.chupryna.url_shortener.util.IpMasker;
@@ -37,17 +38,17 @@ public class UrlController {
 
     @PostMapping("/shorten")
     @Operation(
-            summary = "Shorten a long URL",
-            description = "Generates a 7-character random alphanumeric short code, persists it in PostgreSQL, " +
+        summary = "Shorten a long URL",
+        description = "Generates a 7-character random alphanumeric short code, persists it in PostgreSQL, " +
                     "and warms up the Redis cache."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "URL shortened successfully, returns short code"),
-            @ApiResponse(responseCode = "400", description = "Validation error or invalid request payload")
+        @ApiResponse(responseCode = "200", description = "URL shortened successfully, returns short code"),
+        @ApiResponse(responseCode = "400", description = "Validation error or invalid request payload")
     })
     public ResponseEntity<String> shortenUrl(
         @RequestBody @Valid UrlRequest urlRequest,
-        @RequestHeader(value = "X-User-Id", required = false) Long userId
+        @RequestHeader(value = SecurityHeaders.X_USER_ID, required = false) Long userId
     ) {
         String shortCode = urlService.shortenUrl(urlRequest.url(), urlRequest.ttlDays(), userId);
         return ResponseEntity.ok(shortCode);
@@ -56,13 +57,13 @@ public class UrlController {
 
     @GetMapping("/{shortCode:[a-zA-Z0-9]{7}}")
     @Operation(
-            summary = "Redirect to original URL",
-            description = "Resolve original URL from Redis cache (or PostgreSQL on cache miss) " +
+        summary = "Redirect to original URL",
+        description = "Resolve original URL from Redis cache (or PostgreSQL on cache miss) " +
                     "and performs HTTP 302 redirect."
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "302", description = "Redirect to target URL"),
-            @ApiResponse(responseCode = "404", description = "Short URL not found")
+        @ApiResponse(responseCode = "302", description = "Redirect to target URL"),
+        @ApiResponse(responseCode = "404", description = "Short URL not found")
     })
     public ResponseEntity<Void> redirect(
             @Parameter(description = "Unique Base62 short code", example = "aB7xK9q")
@@ -108,7 +109,7 @@ public class UrlController {
         @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
     })
     public ResponseEntity<List<UrlResponse>> getMyUrls(
-        @RequestHeader("X-User-Id") Long userId
+        @RequestHeader(SecurityHeaders.X_USER_ID) Long userId
     ) {
         return ResponseEntity.ok(urlService.getUserUrls(userId));
     }

@@ -2,6 +2,7 @@ package com.chupryna.gateway.filter;
 
 import com.chupryna.gateway.BaseIntegrationTest;
 import com.chupryna.gateway.util.TestJwt;
+import com.chupryna.url_shortener.security.SecurityHeaders;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -63,8 +64,8 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
             .expectStatus().isOk();
 
         wireMockServer.verify(getRequestedFor(urlPathEqualTo("/api/v1/urls/me"))
-            .withHeader("X-User-Id", equalTo("42"))
-            .withHeader("X-User-Role", equalTo("ROLE_USER")));
+            .withHeader(SecurityHeaders.X_USER_ID, equalTo("42"))
+            .withHeader(SecurityHeaders.X_USER_ROLE, equalTo("ROLE_USER")));
     }
 
     @Test
@@ -75,14 +76,14 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
 
         webTestClient.post()
             .uri("/api/v1/urls/shorten")
-            .header("X-User-Id", "999")
-            .header("X-User-Role", "ROLE_ADMIN")
+            .header(SecurityHeaders.X_USER_ID, "999")
+            .header(SecurityHeaders.X_USER_ROLE, "ROLE_ADMIN")
             .exchange()
             .expectStatus().isOk();
 
         wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/urls/shorten"))
-            .withoutHeader("X-User-Id")
-            .withoutHeader("X-User-Role"));
+            .withoutHeader(SecurityHeaders.X_USER_ID)
+            .withoutHeader(SecurityHeaders.X_USER_ROLE));
     }
 
     @Test
@@ -100,7 +101,7 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
             .expectStatus().isOk();
 
         wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/urls/shorten"))
-            .withoutHeader("X-User-Id"));
+            .withoutHeader(SecurityHeaders.X_USER_ID));
     }
 
     @Test
@@ -115,7 +116,7 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
             .expectStatus().isFound();
 
         wireMockServer.verify(getRequestedFor(urlPathEqualTo("/api/v1/urls/aB7xK9q"))
-            .withoutHeader("X-User-Id"));
+            .withoutHeader(SecurityHeaders.X_USER_ID));
     }
 
     @Test
@@ -133,6 +134,6 @@ class JwtAuthenticationFilterIntegrationTest extends BaseIntegrationTest {
             .expectStatus().isOk();
 
         wireMockServer.verify(postRequestedFor(urlPathEqualTo("/api/v1/auth/refresh"))
-            .withoutHeader("X-User-Id"));
+            .withoutHeader(SecurityHeaders.X_USER_ID));
     }
 }

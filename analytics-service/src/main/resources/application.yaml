@@ -30,6 +30,13 @@ spring:
       properties:
         spring.json.trusted.packages: "com.chupryna.*"
 
+  cache:
+    type: caffeine
+    cache-names:
+      - url-access
+    caffeine:
+      spec: "maximumSize=10000,expireAfterWrite=60s"
+
 management:
   tracing:
     sampling:
@@ -37,3 +44,9 @@ management:
     export:
       zipkin:
         endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+services:
+  url-service:
+    url: ${URL_SERVICE_URL:http://localhost:8081}
+    connect-timeout: 1s
+    read-timeout: 2s
